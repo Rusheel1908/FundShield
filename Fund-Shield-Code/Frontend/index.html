@@ -1365,6 +1365,7 @@
                 <div class="panel-title">
                   📋 Expense Ledger
                   <div class="panel-badge" id="txCountBadge">0 records</div>
+                  <button class="btn btn-ghost" onclick="exportCSV()" style="font-size:10px;padding:4px 10px;margin-left:8px;">⬇ Export CSV</button>
                 </div>
                 <div class="panel-actions">
                   <button class="btn btn-ghost" onclick="fetchData()">
@@ -2270,6 +2271,60 @@
       renderFlagged();
       renderAnalytics();
     };
+
+    /* =====================================================
+       EXPORT CSV
+    ===================================================== */
+    function exportCSV() {
+      if (!allTxns || allTxns.length === 0) {
+        showToast('error', '⚠️ No expense data to export.');
+        return;
+      }
+
+      const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
+      const now = new Date().toISOString().slice(0, 10);
+      const networkName = chainId ? (CONTRACTS[chainId]?.name || 'Unknown') : 'Demo';
+      const contractAddr = chainId ? (CONTRACTS[chainId]?.address || 'N/A') : 'N/A';
+
+      const headers = [
+        'ID', 'Requester', 'Receiver', 'Amount (ETH)', 'Amount (USD)',
+        'Purpose', 'Category', 'Status', 'Flagged',
+        'Approval Count', 'Approver', 'Reject Reason',
+        'Created At', 'Updated At', 'Network', 'Contract'
+      ];
+
+      const rows = allTxns.map(exp => {
+        const amtEth = parseFloat(ethers.formatEther(exp.amount)).toFixed(8);
+        const usd = weiToUSD(exp.amount);
+        const amtUSD = usd !== null ? (Number(usd) / 1e8).toFixed(2) : 'N/A';
+        const createdAt = new Date(Number(exp.createdAt) * 1000).toISOString();
+        const updatedAt = new Date(Number(exp.updatedAt) * 1000).toISOString();
+        const csvEscape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+        return [
+          exp.id, exp.requester, exp.receiver,
+          amtEth, amtUSD,
+          csvEscape(exp.purpose || ''),
+          csvEscape(exp.category || ''),
+          STATUS_ENUM[Number(exp.status)] || 'Unknown',
+          exp.flagged ? 'YES' : 'NO',
+          exp.approvalCount !== undefined ? Number(exp.approvalCount) : 0,
+          exp.approver || '',
+          csvEscape(exp.rejectReason || ''),
+          createdAt, updatedAt,
+          networkName, contractAddr
+        ].join(',');
+      });
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `fundshield-audit-${now}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast('success', `✅ Exported ${allTxns.length} expense(s) to CSV`);
+    }
 
     /* Auto-launch demo if MetaMask is absent (hackathon judging UX) */
     window.addEventListener('load', () => {
