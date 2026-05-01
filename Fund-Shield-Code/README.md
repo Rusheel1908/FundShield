@@ -2,6 +2,8 @@
 
 On-chain public fund transparency system built with **Solidity + Foundry + ethers.js v6**.
 
+🌐 **Live Demo:** https://hilarious-beignet-36a983.netlify.app
+
 Live on Sepolia: `0x03f50393d76E84D6f7C150C4e00836D1C3470D53`
 
 ---
