@@ -2055,12 +2055,24 @@
         const shortAddr = exp.receiver.slice(0, 8) + '…' + exp.receiver.slice(-6);
         const amtDisplay = isZero ? '0 ETH' : `${amtEth.toFixed(4)} ETH${amtUSD !== null ? '\n' + formatUSD(amtUSD) : ''}`;
 
+        const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
+        const statusLabel = STATUS_ENUM[Number(exp.status)] || 'Unknown';
+        const statusColor = exp.status == 1n ? 'var(--green)' : exp.status == 2n ? 'var(--cyan)' : exp.status == 3n || exp.status == 4n ? 'var(--red)' : 'var(--amber)';
+
+        const unlockTs = exp.executeAfter !== undefined ? Number(exp.executeAfter) : 0;
+        const nowTs = Math.floor(Date.now() / 1000);
+        const isLocked = unlockTs > 0 && nowTs < unlockTs;
+        const lockInfo = isLocked
+          ? `<span style="font-size:10px;color:var(--amber);display:block;margin-top:3px;">⏳ Time-lock: ~${Math.ceil((unlockTs - nowTs) / 3600)}h remaining</span>`
+          : (unlockTs > 0 ? `<span style="font-size:10px;color:var(--green);display:block;margin-top:3px;">🔓 Time-lock cleared</span>` : '');
+
         return `
       <div class="flagged-item" style="animation-delay:${i * 0.05}s">
         <div class="flagged-icon">🚩</div>
         <div class="flagged-info">
-          <div class="flagged-addr">${shortAddr}</div>
+          <div class="flagged-addr">${shortAddr} <span style="font-size:10px;color:${statusColor};margin-left:6px;">[${statusLabel}]</span></div>
           <div class="flagged-reason">${reasons.join(' · ')}</div>
+          ${lockInfo}
         </div>
         <div class="flagged-amount" style="white-space:pre-line">${amtDisplay}</div>
       </div>`;
