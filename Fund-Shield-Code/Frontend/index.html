@@ -14,6 +14,8 @@
 
   <!-- ethers.js v6 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <style>
     /* ============================================
@@ -1559,6 +1561,7 @@
                     <div class="progress-fill danger" id="riskBar"></div>
                   </div>
                 </div>
+                <canvas id="analyticsChart" style="margin-top:16px;max-height:160px;"></canvas>
               </div>
             </div>
 
@@ -1567,8 +1570,9 @@
               <div class="panel-header">
                 <div class="panel-title">💰 Category Budgets</div>
               </div>
-              <div id="categoryBudgetBody" style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
-                <div class="empty-state" style="padding:12px 0;"><p style="font-size:12px;">No category caps set.</p></div>
+              <div style="padding:12px 16px;">
+                <canvas id="categoryChart" style="max-height:180px;"></canvas>
+                <div id="categoryBudgetBody" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;"></div>
               </div>
             </div>
 
@@ -1710,6 +1714,8 @@
     let velocityThresholdVal = 3n;   // max payments to same receiver in 7 days
     let timeLockDelayVal = 172800n;  // 48 h in seconds
     let categoryData = {};           // category → { budget, spent, remaining }
+    let _chartDonut = null;
+    let _chartCatBar = null;
 
     /* =====================================================
        STATUS HELPERS — shared across renderTxTable / renderFlagged
@@ -2115,7 +2121,7 @@
         }
 
         return `
-      <tr class="tx-row ${exp.flagged ? 'flagged' : ''}" data-idx="${i}">
+      <tr class="tx-row ${exp.flagged ? 'flagged' : ''}" data-idx="${i}" style="cursor:pointer;" onclick="toggleRowDetail(this,${i})">
         <td class="tx-id">#${exp.id}</td>
         <td class="tx-addr" title="${exp.requester}">${shortReq}</td>
         <td class="tx-addr" title="${exp.receiver}">${shortRec}</td>
@@ -2213,6 +2219,30 @@
         document.getElementById('cleanRateBar').style.width = cleanRate + '%';
         document.getElementById('riskBar').style.width = riskRate + '%';
       }, 300);
+
+      const ctx = document.getElementById('analyticsChart');
+      if (ctx && typeof Chart !== 'undefined' && total > 0) {
+        if (_chartDonut) _chartDonut.destroy();
+        _chartDonut = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Clean', 'High-Value', 'Zero Amount', 'Empty Purpose'],
+            datasets: [{
+              data: [clean, highCount, zeroCount, emptyCount],
+              backgroundColor: ['#00ff88cc','#ffb347cc','#ff3d5acc','#ff6b8acc'],
+              borderColor: '#0d1220',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            cutout: '65%',
+            plugins: {
+              legend: { position: 'bottom', labels: { color: '#8899b4', font: { size: 10 }, padding: 6, boxWidth: 10 } }
+            }
+          }
+        });
+      }
     }
 
     /* =====================================================
@@ -2229,22 +2259,40 @@
         return;
       }
 
+      const labels = active.map(([cat]) => cat.charAt(0).toUpperCase() + cat.slice(1));
+      const budgets = active.map(([, info]) => parseFloat(ethers.formatEther(info.budget)));
+      const spents = active.map(([, info]) => parseFloat(ethers.formatEther(info.spent)));
+
+      const ctx = document.getElementById('categoryChart');
+      if (ctx && typeof Chart !== 'undefined') {
+        if (_chartCatBar) _chartCatBar.destroy();
+        _chartCatBar = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Budget (ETH)', data: budgets, backgroundColor: 'rgba(0,212,255,0.18)', borderColor: '#00d4ff', borderWidth: 1, borderRadius: 3 },
+              { label: 'Spent (ETH)',  data: spents,  backgroundColor: 'rgba(255,179,71,0.55)', borderColor: '#ffb347', borderWidth: 1, borderRadius: 3 }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { ticks: { color: '#8899b4', font: { size: 9 } }, grid: { color: '#1a2235' } },
+              y: { ticks: { color: '#8899b4', font: { size: 9 } }, grid: { color: '#1a2235' }, beginAtZero: true }
+            },
+            plugins: { legend: { labels: { color: '#8899b4', font: { size: 10 }, boxWidth: 10 } } }
+          }
+        });
+      }
+
       body.innerHTML = active.map(([cat, info]) => {
-        const budgetEth = parseFloat(ethers.formatEther(info.budget));
-        const spentEth = parseFloat(ethers.formatEther(info.spent));
-        const pct = budgetEth > 0 ? Math.min((spentEth / budgetEth) * 100, 100) : 0;
         const isOver = info.spent > info.budget;
-        const barColor = isOver ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--green)';
-        return `
-        <div style="margin-bottom:2px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:11px;text-transform:capitalize;color:var(--text-secondary)">${cat}</span>
-            <span style="font-size:10px;font-family:var(--font-mono);color:${barColor}">${spentEth.toFixed(3)} / ${budgetEth.toFixed(3)} ETH${isOver ? ' ⚠️' : ''}</span>
-          </div>
-          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
-            <div style="height:100%;width:${pct.toFixed(1)}%;background:${barColor};transition:width 0.6s ease;border-radius:2px;"></div>
-          </div>
-        </div>`;
+        const spentEth = parseFloat(ethers.formatEther(info.spent)).toFixed(3);
+        const budgetEth = parseFloat(ethers.formatEther(info.budget)).toFixed(3);
+        return isOver
+          ? `<div style="font-size:10px;color:var(--red);font-family:var(--font-mono)">⚠️ ${cat}: ${spentEth} / ${budgetEth} ETH OVER BUDGET</div>`
+          : '';
       }).join('');
     }
 
@@ -2476,11 +2524,66 @@
     /* =====================================================
        BLOCK LISTENER
     ===================================================== */
+    function escHtml(str) {
+      return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function toggleRowDetail(row, idx) {
+      const existId = 'detail-row-' + idx;
+      const existing = document.getElementById(existId);
+      if (existing) { existing.remove(); row.classList.remove('expanded'); return; }
+
+      const exp = allTxns[idx];
+      if (!exp) return;
+      const nowTs = Math.floor(Date.now() / 1000);
+      const unlockTs = Number(exp.executeAfter ?? 0);
+      const isLocked = unlockTs > 0 && nowTs < unlockTs;
+      const lockStr = unlockTs > 0
+        ? isLocked ? `⏳ Locked ~${Math.ceil((unlockTs - nowTs) / 3600)}h remaining` : '🔓 Time-lock cleared'
+        : '—';
+      const created = new Date(Number(exp.createdAt) * 1000).toLocaleString();
+      const updated = new Date(Number(exp.updatedAt) * 1000).toLocaleString();
+      const { label: statusLabel, color: statusColor } = getStatusInfo(exp.status);
+
+      const detail = document.createElement('tr');
+      detail.id = existId;
+      detail.innerHTML = `<td colspan="8" style="padding:0;background:var(--bg-panel);border-bottom:2px solid var(--border-glow);">
+        <div style="padding:14px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Requester</div><div style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);word-break:break-all">${escHtml(exp.requester)}</div></div>
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Receiver</div><div style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);word-break:break-all">${escHtml(exp.receiver)}</div></div>
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Status</div><div style="font-size:12px;font-weight:700;color:${statusColor}">${statusLabel}</div></div>
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Approvals</div><div style="font-size:12px;color:var(--text-secondary)">${exp.approvalCount ?? 0} / ${requiredApprovals}</div></div>
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Time-Lock</div><div style="font-size:11px;color:${isLocked ? 'var(--amber)' : 'var(--green)'}">${lockStr}</div></div>
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Purpose</div><div style="font-size:11px;color:var(--text-secondary)">${escHtml(exp.purpose) || '⚠ Empty'}</div></div>
+          ${exp.rejectReason ? `<div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Reject Reason</div><div style="font-size:11px;color:var(--red)">${escHtml(exp.rejectReason)}</div></div>` : ''}
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Submitted</div><div style="font-size:10px;color:var(--text-secondary)">${created}</div></div>
+          <div><div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;font-family:var(--font-mono)">Last Updated</div><div style="font-size:10px;color:var(--text-secondary)">${updated}</div></div>
+        </div>
+      </td>`;
+
+      row.after(detail);
+      row.classList.add('expanded');
+    }
+
     async function startBlockListener() {
       if (!provider) return;
       provider.on('block', (blockNumber) => {
         document.getElementById('statusBlock').textContent = '· Block: ' + blockNumber;
       });
+      if (contract) {
+        contract.on('ExpenseSubmitted', (id) => {
+          showToast('info', `🆕 New expense #${id} submitted — refreshing…`);
+          fetchData();
+        });
+        contract.on('ExpenseApproved', (id) => {
+          showToast('success', `✅ Expense #${id} approved — refreshing…`);
+          fetchData();
+        });
+        contract.on('ExpenseExecuted', (id) => {
+          showToast('success', `💸 Expense #${id} executed — refreshing…`);
+          fetchData();
+        });
+      }
     }
 
     /* =====================================================
