@@ -2092,6 +2092,36 @@
     }
 
     /* =====================================================
+       CONTRACT INFO PANEL — live Chainlink + protocol settings
+    ===================================================== */
+    function updateContractInfoPanel() {
+      const priceEl = document.getElementById('ethPriceDisplay');
+      const flagEl = document.getElementById('flagThreshDisplay');
+      const quorumEl = document.getElementById('quorumDisplay');
+      const velEl = document.getElementById('velThreshDisplay');
+      const tlEl = document.getElementById('timeLockDisplay');
+
+      if (priceEl) {
+        priceEl.textContent = ethPriceUSD > 0n
+          ? '$' + (Number(ethPriceUSD) / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : 'Unavailable';
+      }
+      if (flagEl) {
+        flagEl.textContent = '$' + (Number(HIGH_THRESHOLD_USD) / 1e8).toLocaleString('en-US', { maximumFractionDigits: 0 });
+      }
+      if (quorumEl) {
+        quorumEl.textContent = Number(requiredApprovals) + ' of N auditors';
+      }
+      if (velEl) {
+        velEl.textContent = Number(velocityThresholdVal) + ' payments / 7 days';
+      }
+      if (tlEl) {
+        const hours = Number(timeLockDelayVal) / 3600;
+        tlEl.textContent = hours >= 24 ? (hours / 24).toFixed(0) + ' days' : hours.toFixed(0) + ' hours';
+      }
+    }
+
+    /* =====================================================
        APPROVE / REJECT / EXECUTE ACTIONS
     ===================================================== */
     async function approveExpense(id) {
