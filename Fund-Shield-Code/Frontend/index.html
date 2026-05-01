@@ -1298,12 +1298,24 @@
       <div id="connectPrompt" class="connect-prompt">
         <div class="connect-prompt-icon">🛡️</div>
         <h2>FundShield Dashboard</h2>
-        <p>Connect your MetaMask wallet to access the public fund transparency ledger. All roles welcome — Admin,
-          Auditor, or Public.</p>
+        <p>Connect your MetaMask wallet to access the full dashboard — or view the ledger read-only with no wallet required.</p>
         <button class="btn btn-primary" style="padding:12px 28px;font-size:14px;" onclick="connectWallet()">
           🦊 Connect MetaMask
         </button>
-        <p style="font-size:11px;color:var(--text-muted);">Works on Sepolia testnet & Anvil local node</p>
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);width:100%;max-width:440px">
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">🌐 Public read-only view — no wallet needed</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+            <select id="publicNetwork" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:var(--font-mono)">
+              <option value="11155111">Sepolia Testnet</option>
+              <option value="31337">Anvil Local</option>
+            </select>
+            <button class="btn btn-ghost" style="padding:6px 16px;font-size:12px;" onclick="viewPublic()">
+              👁 View Ledger
+            </button>
+          </div>
+          <p style="font-size:10px;color:var(--text-muted);margin-top:8px;">Uses public RPC · read-only · no signing</p>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:16px;">Wallet mode works on Sepolia testnet &amp; Anvil local node</p>
       </div>
 
       <!-- Wallet connected → Dashboard -->
@@ -1733,6 +1745,58 @@
       }
     }
 
+    /* =====================================================
+       PUBLIC READ-ONLY VIEW (no wallet)
+    ===================================================== */
+    const PUBLIC_RPC = {
+      11155111: 'https://rpc.sepolia.org',
+      31337: 'http://127.0.0.1:8545'
+    };
+
+    async function viewPublic() {
+      const networkSelect = document.getElementById('publicNetwork');
+      const selectedChainId = Number(networkSelect.value);
+      const rpcUrl = PUBLIC_RPC[selectedChainId];
+      const cfg = CONTRACTS[selectedChainId];
+
+      if (!cfg) {
+        showToast('error', '⚠️ No contract configured for this network.');
+        return;
+      }
+
+      try {
+        showToast('info', '🌐 Connecting via public RPC…');
+        provider = new ethers.JsonRpcProvider(rpcUrl);
+        signer = null;
+        chainId = selectedChainId;
+        walletAddr = null;
+        currentRole = 'public';
+
+        // Read-only contract (no signer)
+        contract = new ethers.Contract(cfg.address, ABI, provider);
+        document.getElementById('contractAddrDisplay').textContent = cfg.address;
+        document.getElementById('networkDisplay').textContent = cfg.name + ' (chainId: ' + chainId + ') · Read-only';
+        document.getElementById('statusContract').textContent = '· Contract: ' + cfg.address.slice(0, 10) + '…';
+
+        // Update nav to show read-only state
+        const btn = document.getElementById('connectBtn');
+        btn.textContent = '👁 Read-only';
+        btn.classList.add('connected');
+        document.getElementById('walletDisplay').textContent = '(no wallet)';
+
+        showDashboard();
+        // Hide write-action panel in read-only mode
+        document.getElementById('addTxPanel')?.classList.add('hidden');
+        applyRoleUI('public');
+
+        await fetchData();
+        startBlockListener();
+      } catch (err) {
+        console.error(err);
+        showToast('error', '❌ Could not connect to public RPC: ' + (err.message || err));
+      }
+    }
+
     function showDashboard() {
       document.getElementById('connectPrompt').classList.add('hidden');
       document.getElementById('dashboard').classList.remove('hidden');
@@ -1908,13 +1972,14 @@
           : '';
 
         let actionsHtml = '';
-        if (exp.status == 0) { // Pending
+        const canWrite = signer !== null;
+        if (canWrite && exp.status == 0) { // Pending — show sign/reject for wallet users
           actionsHtml = `
             ${sigBadge}
             <button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="approveExpense(${exp.id})">✓ Sign</button>
             <button class="btn btn-danger" style="font-size:9px;padding:4px 8px;" onclick="rejectExpense(${exp.id})">✗ Reject</button>
           `;
-        } else if (exp.status == 1) { // Approved
+        } else if (canWrite && exp.status == 1) { // Approved — show execute for wallet users
           const unlockTs = exp.executeAfter !== undefined ? Number(exp.executeAfter) : 0;
           const nowTs = Math.floor(Date.now() / 1000);
           const isLocked = unlockTs > 0 && nowTs < unlockTs;
@@ -1924,6 +1989,8 @@
           } else {
             actionsHtml = `<button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="executeExpense(${exp.id})">▶ Execute</button>`;
           }
+        } else if (!canWrite && exp.status == 0) {
+          actionsHtml = sigBadge || `<span style="font-size:9px;color:var(--text-muted)">Read-only</span>`;
         }
 
         return `
