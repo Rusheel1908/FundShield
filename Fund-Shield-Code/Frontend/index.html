@@ -2426,28 +2426,40 @@
     window.loadDemoData = function () {
       showToast('info', '🎭 Loading demo data…');
 
-      // Simulated transactions matching contract Expense struct
-      const demoMaker = (id, req, rec, amt, purpose, category, flagged, status) => ({
-        id: BigInt(id),
-        requester: req,
-        receiver: rec,
-        amount: amt,
-        purpose,
-        category,
-        flagged,
-        status: BigInt(status), // 0=Pending,1=Approved,2=Executed,3=Rejected,4=Cancelled
-        approver: '0x0000000000000000000000000000000000000000',
-        rejectReason: '',
+      // Pre-fill protocol state so all panels render correctly without a wallet
+      ethPriceUSD = 3000n * 100_000_000n;        // $3,000/ETH (Chainlink 8-decimal)
+      HIGH_THRESHOLD_USD = 10_000n * 100_000_000n; // $10,000 flag threshold
+      requiredApprovals = 2n;
+      velocityThresholdVal = 3n;
+      timeLockDelayVal = 172800n; // 48 h
+      categoryData = {
+        operations:     { budget: ethers.parseEther('5'),  spent: ethers.parseEther('0'),   remaining: ethers.parseEther('5') },
+        funding:        { budget: ethers.parseEther('10'), spent: ethers.parseEther('4.2'), remaining: ethers.parseEther('5.8') },
+        events:         { budget: ethers.parseEther('4'),  spent: ethers.parseEther('1.2'), remaining: ethers.parseEther('2.8') },
+        marketing:      { budget: 0n, spent: 0n, remaining: 0n },
+        infrastructure: { budget: ethers.parseEther('8'),  spent: ethers.parseEther('2.5'), remaining: ethers.parseEther('5.5') },
+        other:          { budget: 0n, spent: 0n, remaining: 0n },
+      };
+
+      // Simulated transactions — includes approvalCount and executeAfter for multi-sig / time-lock demo
+      const demoMaker = (id, req, rec, amt, purpose, category, flagged, status, approvalCount = 0, execAfterHours = 0) => ({
+        id: BigInt(id), requester: req, receiver: rec, amount: amt, purpose, category, flagged,
+        status: BigInt(status),
+        approver: status >= 1 ? '0xAud1234567890EFabcd1234567890efABCD0099' : '0x0000000000000000000000000000000000000000',
+        rejectReason: status === 3 ? 'Does not meet policy requirements' : '',
         createdAt: BigInt(Math.floor(Date.now() / 1000) - 86400),
-        updatedAt: BigInt(Math.floor(Date.now() / 1000))
+        updatedAt: BigInt(Math.floor(Date.now() / 1000)),
+        approvalCount: BigInt(approvalCount),
+        executeAfter: execAfterHours > 0 ? BigInt(Math.floor(Date.now() / 1000) + execAfterHours * 3600) : 0n
       });
       allTxns = [
-        demoMaker(0, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xAbCd1234567890EFabcd1234567890efABCD1234', ethers.parseEther('2.5'),  'Infrastructure Grant Q2', 'infrastructure', false, 1),
-        demoMaker(1, '0xAdmin1234567890EFabcd1234567890efABCD00', '0x1111222233334444555566667777888899990000', 0n,                         '',                       'operations',     true,  0),
-        demoMaker(2, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xDeAdBeEf00000000000000000000000000000001', ethers.parseEther('1200'), 'Emergency Relief Fund',  'funding',        true,  0),
-        demoMaker(3, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xFaCeB00c0000000000000000000000000000CAFE', ethers.parseEther('1.2'),  'School Renovation',      'events',         false, 2),
-        demoMaker(4, '0xAdmin1234567890EFabcd1234567890efABCD00', '0x0000000000000000000000000000000000000042', ethers.parseEther('0.05'), '',                       'marketing',      true,  3),
-        demoMaker(5, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xBaBaFaceBaBaFace000000000000000000000001', ethers.parseEther('3.0'),  'Road Maintenance Batch 7','infrastructure', false, 0),
+        demoMaker(0,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000A1', ethers.parseEther('2.5'),  'Infrastructure Grant Q2',  'infrastructure', false, 2, 2, 0),
+        demoMaker(1,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000B2', 0n,                        '',                         'operations',     true,  0, 0, 0),
+        demoMaker(2,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000B2', ethers.parseEther('4.2'),  'Emergency Relief Fund',    'funding',        true,  1, 2, 36),
+        demoMaker(3,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000C3', ethers.parseEther('1.2'),  'School Renovation Phase 1','events',         false, 2, 2, 0),
+        demoMaker(4,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000D4', ethers.parseEther('0.05'), '',                         'marketing',      true,  3, 2, 0),
+        demoMaker(5,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000B2', ethers.parseEther('3.0'),  'Road Maintenance Batch 7', 'infrastructure', true,  0, 1, 0),
+        demoMaker(6,'0xAdmin000000000000000000000000000000000001','0xVendor00000000000000000000000000000000E5', ethers.parseEther('1.8'),  'Community Event Funding',  'events',         false, 0, 0, 0),
       ];
       flaggedTxns = allTxns.filter(t => t.flagged);
 
@@ -2457,8 +2469,8 @@
       applyRoleUI(currentRole);
 
       document.getElementById('walletDisplay').textContent = '0xDEMO…0000 (demo mode)';
-      document.getElementById('contractAddrDisplay').textContent = '0x5FbDB231…180aa3';
-      document.getElementById('networkDisplay').textContent = 'Demo Mode';
+      document.getElementById('contractAddrDisplay').textContent = '0x03f50393…470D53';
+      document.getElementById('networkDisplay').textContent = 'Demo Mode (Sepolia)';
       document.getElementById('roleDisplay').textContent = currentRole.toUpperCase();
       document.getElementById('netDot').className = 'net-dot connected';
       document.getElementById('netLabel').textContent = 'Demo Mode';
@@ -2471,6 +2483,8 @@
       renderTxTable();
       renderFlagged();
       renderAnalytics();
+      renderCategoryBudgets();
+      updateContractInfoPanel();
     };
 
     /* =====================================================
