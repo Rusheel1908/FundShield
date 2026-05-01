@@ -276,6 +276,46 @@ contract FundShieldTest is Test {
         assertEq(spent, 2 ether);
     }
 
+    // ─── Velocity / repeat-receiver flagging ──────────────────
+
+    function test_Velocity_BelowThresholdNotFlagged() public {
+        // Default threshold = 3; first two submissions to BOB should not flag for velocity
+        vm.startPrank(ALICE);
+        uint256 id1 = fs.submitExpense(BOB, 1 ether, "payment 1", "operations");
+        uint256 id2 = fs.submitExpense(BOB, 1 ether, "payment 2", "operations");
+        vm.stopPrank();
+
+        assertFalse(fs.getExpense(id1).flagged);
+        assertFalse(fs.getExpense(id2).flagged);
+    }
+
+    function test_Velocity_AboveThresholdIsFlagged() public {
+        // 4th payment to BOB in the same window (threshold=3) → flag
+        vm.startPrank(ALICE);
+        fs.submitExpense(BOB, 1 ether, "payment 1", "operations");
+        fs.submitExpense(BOB, 1 ether, "payment 2", "operations");
+        fs.submitExpense(BOB, 1 ether, "payment 3", "operations");
+        uint256 id4 = fs.submitExpense(BOB, 1 ether, "payment 4", "operations");
+        vm.stopPrank();
+
+        assertTrue(fs.getExpense(id4).flagged);
+    }
+
+    function test_Velocity_WindowResetsAfter7Days() public {
+        vm.startPrank(ALICE);
+        fs.submitExpense(BOB, 1 ether, "p1", "operations");
+        fs.submitExpense(BOB, 1 ether, "p2", "operations");
+        fs.submitExpense(BOB, 1 ether, "p3", "operations");
+        vm.stopPrank();
+
+        // Advance 7 days — window resets
+        vm.warp(block.timestamp + 7 days + 1);
+
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 1 ether, "after reset", "operations");
+        assertFalse(fs.getExpense(id).flagged);
+    }
+
     function test_CategoryBudget_NoCap_NoFlag() public {
         // No budget set — should not flag for budget reason
         vm.prank(ALICE);

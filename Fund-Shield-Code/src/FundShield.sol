@@ -60,6 +60,12 @@ contract FundShield {
     mapping(string => uint256) public categoryBudget;
     // category → total wei of non-rejected/cancelled expenses
     mapping(string => uint256) public categorySpent;
+    // receiver → number of expenses submitted in the current 7-day window
+    mapping(address => uint256) public receiverWindowCount;
+    // receiver → start timestamp of the current 7-day window
+    mapping(address => uint256) public receiverWindowStart;
+    // how many payments to the same receiver within 7 days triggers a flag
+    uint256 public velocityThreshold;
 
     // ─────────────────────────────────────────────────────────────
     // Events
@@ -71,6 +77,7 @@ contract FundShield {
     event RequiredApprovalsUpdated(uint256 oldRequired, uint256 newRequired);
     event CategoryBudgetSet(string category, uint256 budget);
     event CategorySpentUpdated(string category, uint256 spent, uint256 budget);
+    event VelocityThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
     event ExpenseSubmitted(
         uint256 indexed id,
         address indexed requester,
@@ -126,6 +133,7 @@ contract FundShield {
         priceFeed = AggregatorV3Interface(_priceFeed);
         largeAmountThresholdUSD = 10_000e8; // default $10,000
         requiredApprovals = 1;              // default: single auditor (backwards-compatible)
+        velocityThreshold = 3;              // flag after 3 payments to the same receiver in 7 days
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -141,6 +149,13 @@ contract FundShield {
         uint256 oldThreshold = largeAmountThresholdUSD;
         largeAmountThresholdUSD = newThresholdUSD;
         emit LargeAmountThresholdUpdated(oldThreshold, newThresholdUSD);
+    }
+
+    /// @notice Set how many payments to the same receiver within 7 days triggers a flag.
+    function setVelocityThreshold(uint256 newThreshold) external onlyOwner {
+        uint256 old = velocityThreshold;
+        velocityThreshold = newThreshold;
+        emit VelocityThresholdUpdated(old, newThreshold);
     }
 
     /// @notice Set a per-category spending cap (in wei). Pass 0 to remove the cap.
@@ -174,7 +189,8 @@ contract FundShield {
         external
         returns (uint256 id)
     {
-        bool flag = _shouldFlag(amount, purpose, category);
+        _trackReceiverVelocity(receiver);
+        bool flag = _shouldFlag(amount, purpose, category, receiver);
 
         id = _expenses.length;
         _expenses.push(
@@ -350,7 +366,18 @@ contract FundShield {
     // Internal helpers
     // ─────────────────────────────────────────────────────────────
 
-    function _shouldFlag(uint256 amount, string calldata purpose, string calldata category)
+    function _trackReceiverVelocity(address receiver) internal {
+        uint256 windowStart = receiverWindowStart[receiver];
+        if (block.timestamp >= windowStart + 7 days) {
+            // Start a fresh 7-day window
+            receiverWindowStart[receiver] = block.timestamp;
+            receiverWindowCount[receiver] = 1;
+        } else {
+            receiverWindowCount[receiver] += 1;
+        }
+    }
+
+    function _shouldFlag(uint256 amount, string calldata purpose, string calldata category, address receiver)
         internal
         view
         returns (bool)
@@ -363,6 +390,9 @@ contract FundShield {
         // Flag if submission would exceed the category spending cap
         uint256 cap = categoryBudget[category];
         if (cap > 0 && categorySpent[category] + amount > cap) return true;
+        // Flag if the receiver is receiving too many payments in a 7-day window
+        // Note: _trackReceiverVelocity already incremented the count before this call
+        if (velocityThreshold > 0 && receiverWindowCount[receiver] > velocityThreshold) return true;
         return false;
     }
 

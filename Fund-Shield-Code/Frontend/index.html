@@ -1622,7 +1622,10 @@
       {"inputs":[{"internalType":"string","name":"category","type":"string"},{"internalType":"uint256","name":"budget","type":"uint256"}],"name":"setCategoryBudget","outputs":[],"stateMutability":"nonpayable","type":"function"},
       {"inputs":[{"internalType":"string","name":"category","type":"string"}],"name":"getCategoryInfo","outputs":[{"internalType":"uint256","name":"budget","type":"uint256"},{"internalType":"uint256","name":"spent","type":"uint256"},{"internalType":"uint256","name":"remaining","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"categoryBudget","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"categorySpent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+      {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"categorySpent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"velocityThreshold","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"receiverWindowCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"newThreshold","type":"uint256"}],"name":"setVelocityThreshold","outputs":[],"stateMutability":"nonpayable","type":"function"}
     ];
 
     /* =====================================================
@@ -1950,6 +1953,10 @@
         if (isZero) reasons.push('Zero amount');
         if (isHigh) reasons.push('High-value (>' + formatUSD(HIGH_THRESHOLD_USD) + ')');
         if (isEmpty) reasons.push('Missing purpose');
+        // Velocity flag: receiver shows in flagged list — note the pattern
+        const windowCount = exp.flagged && !isZero && !isHigh && !isEmpty ? 'Repeat receiver' : null;
+        if (windowCount) reasons.push(windowCount);
+        if (reasons.length === 0) reasons.push('Flagged by contract');
 
         const shortAddr = exp.receiver.slice(0, 8) + '…' + exp.receiver.slice(-6);
         const amtDisplay = isZero ? '0 ETH' : `${amtEth.toFixed(4)} ETH${amtUSD !== null ? '\n' + formatUSD(amtUSD) : ''}`;
