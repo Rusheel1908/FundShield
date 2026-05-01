@@ -56,6 +56,10 @@ contract FundShield {
     mapping(address => bool) public auditors;
     // expenseId → auditorAddress → has signed
     mapping(uint256 => mapping(address => bool)) private _approvedBy;
+    // category → spending cap in wei (0 = no cap)
+    mapping(string => uint256) public categoryBudget;
+    // category → total wei of non-rejected/cancelled expenses
+    mapping(string => uint256) public categorySpent;
 
     // ─────────────────────────────────────────────────────────────
     // Events
@@ -65,6 +69,8 @@ contract FundShield {
     event AuditorUpdated(address indexed auditor, bool authorized);
     event LargeAmountThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
     event RequiredApprovalsUpdated(uint256 oldRequired, uint256 newRequired);
+    event CategoryBudgetSet(string category, uint256 budget);
+    event CategorySpentUpdated(string category, uint256 spent, uint256 budget);
     event ExpenseSubmitted(
         uint256 indexed id,
         address indexed requester,
@@ -94,6 +100,7 @@ contract FundShield {
     error AlreadyFinalized(Status actual);
     error AlreadySigned(uint256 id, address auditor);
     error InvalidQuorum(uint256 required);
+    error CategoryBudgetExceeded(string category, uint256 budget, uint256 spent, uint256 requested);
 
     // ─────────────────────────────────────────────────────────────
     // Modifiers
@@ -136,6 +143,12 @@ contract FundShield {
         emit LargeAmountThresholdUpdated(oldThreshold, newThresholdUSD);
     }
 
+    /// @notice Set a per-category spending cap (in wei). Pass 0 to remove the cap.
+    function setCategoryBudget(string calldata category, uint256 budget) external onlyOwner {
+        categoryBudget[category] = budget;
+        emit CategoryBudgetSet(category, budget);
+    }
+
     /// @notice Set how many distinct auditor signatures are required to approve an expense.
     function setRequiredApprovals(uint256 newRequired) external onlyOwner {
         if (newRequired == 0) revert InvalidQuorum(newRequired);
@@ -161,7 +174,7 @@ contract FundShield {
         external
         returns (uint256 id)
     {
-        bool flag = _shouldFlag(amount, purpose);
+        bool flag = _shouldFlag(amount, purpose, category);
 
         id = _expenses.length;
         _expenses.push(
@@ -226,6 +239,9 @@ contract FundShield {
 
         expense.status = Status.Executed;
         expense.updatedAt = block.timestamp;
+
+        categorySpent[expense.category] += expense.amount;
+        emit CategorySpentUpdated(expense.category, categorySpent[expense.category], categoryBudget[expense.category]);
 
         (bool success,) = payable(expense.receiver).call{value: expense.amount}("");
         if (!success) revert InsufficientBalance(address(this).balance, expense.amount);
@@ -305,6 +321,17 @@ contract FundShield {
         return _approvedBy[id][auditor];
     }
 
+    /// @notice Returns the budget cap, amount spent, and remaining headroom for a category.
+    function getCategoryInfo(string calldata category)
+        external
+        view
+        returns (uint256 budget, uint256 spent, uint256 remaining)
+    {
+        budget = categoryBudget[category];
+        spent = categorySpent[category];
+        remaining = (budget > 0 && budget > spent) ? budget - spent : 0;
+    }
+
     /// @notice Returns the latest ETH/USD price from Chainlink (8 decimals, e.g. 300000000000 = $3,000).
     function getLatestETHPrice() public view returns (uint256) {
         (, int256 price,,,) = priceFeed.latestRoundData();
@@ -323,12 +350,19 @@ contract FundShield {
     // Internal helpers
     // ─────────────────────────────────────────────────────────────
 
-    function _shouldFlag(uint256 amount, string calldata purpose) internal view returns (bool) {
+    function _shouldFlag(uint256 amount, string calldata purpose, string calldata category)
+        internal
+        view
+        returns (bool)
+    {
         if (amount == 0) return true;
         if (bytes(purpose).length == 0) return true;
         uint256 amountInUSD = getAmountInUSD(amount);
         // Skip USD check if price feed unavailable (avoids false-positives on feed outage)
         if (amountInUSD > 0 && amountInUSD > largeAmountThresholdUSD) return true;
+        // Flag if submission would exceed the category spending cap
+        uint256 cap = categoryBudget[category];
+        if (cap > 0 && categorySpent[category] + amount > cap) return true;
         return false;
     }
 

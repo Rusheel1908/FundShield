@@ -234,6 +234,57 @@ contract FundShieldTest is Test {
         fs.setRequiredApprovals(0);
     }
 
+    // ─── Category spending caps ─────────────────────────────────
+
+    function test_CategoryBudget_SetAndRead() public {
+        fs.setCategoryBudget("operations", 5 ether);
+        (uint256 budget, uint256 spent, uint256 remaining) = fs.getCategoryInfo("operations");
+        assertEq(budget, 5 ether);
+        assertEq(spent, 0);
+        assertEq(remaining, 5 ether);
+    }
+
+    function test_CategoryBudget_OverBudgetIsFlagged() public {
+        fs.setCategoryBudget("operations", 2 ether);
+
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 3 ether, "over budget", "operations");
+
+        assertTrue(fs.getExpense(id).flagged);
+    }
+
+    function test_CategoryBudget_WithinBudgetNotFlagged() public {
+        fs.setCategoryBudget("operations", 5 ether);
+
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 3 ether, "vendor payment", "operations");
+
+        assertFalse(fs.getExpense(id).flagged);
+    }
+
+    function test_CategoryBudget_SpentTrackedOnExecution() public {
+        fs.setCategoryBudget("operations", 10 ether);
+        vm.prank(ALICE);
+        fs.depositFunds{value: 5 ether}();
+
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 2 ether, "vendor", "operations");
+        fs.approveExpense(id);
+        fs.executeExpense(id);
+
+        (, uint256 spent,) = fs.getCategoryInfo("operations");
+        assertEq(spent, 2 ether);
+    }
+
+    function test_CategoryBudget_NoCap_NoFlag() public {
+        // No budget set — should not flag for budget reason
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 100 ether, "large but no cap", "infrastructure");
+
+        // Only flag if USD threshold exceeded; at $3k/ETH: 100 ETH = $300k > $10k → flagged for USD, not budget
+        assertTrue(fs.getExpense(id).flagged);
+    }
+
     function test_OnlyAuditorCanApproveRevert() public {
         vm.prank(ALICE);
         uint256 id = fs.submitExpense(BOB, 1 ether, "pay vendor", "operations");

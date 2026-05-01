@@ -1618,7 +1618,11 @@
       {"inputs":[],"name":"priceFeed","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"requiredApprovals","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"auditor","type":"address"}],"name":"hasApproved","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"newRequired","type":"uint256"}],"name":"setRequiredApprovals","outputs":[],"stateMutability":"nonpayable","type":"function"}
+      {"inputs":[{"internalType":"uint256","name":"newRequired","type":"uint256"}],"name":"setRequiredApprovals","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"string","name":"category","type":"string"},{"internalType":"uint256","name":"budget","type":"uint256"}],"name":"setCategoryBudget","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"string","name":"category","type":"string"}],"name":"getCategoryInfo","outputs":[{"internalType":"uint256","name":"budget","type":"uint256"},{"internalType":"uint256","name":"spent","type":"uint256"},{"internalType":"uint256","name":"remaining","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"categoryBudget","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"categorySpent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
     ];
 
     /* =====================================================
@@ -2112,7 +2116,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       const amtInput = document.getElementById('inpAmount');
       if (amtInput) {
-        amtInput.addEventListener('input', () => {
+        amtInput.addEventListener('input', async () => {
           const hint = document.getElementById('amtHint');
           const val = amtInput.value.trim();
           if (!val || val === '0') {
@@ -2126,7 +2130,20 @@
             const usd = weiToUSD(weiVal);
             const high = usd !== null && usd > HIGH_THRESHOLD_USD;
             const usdStr = usd !== null ? ` · ${formatUSD(usd)}` : '';
-            hint.textContent = `≈ ${eth.toFixed(6)} ETH${usdStr} · ${high ? '⚠️ High-value alert' : 'Normal range'}`;
+            const catEl = document.getElementById('inpCategory');
+            const cat = catEl ? catEl.value : '';
+            let catInfo = '';
+            if (contract && cat) {
+              try {
+                const [budget, spent] = await contract.getCategoryInfo(cat);
+                if (budget > 0n) {
+                  const remaining = budget > spent ? budget - spent : 0n;
+                  const overBudget = spent + weiVal > budget;
+                  catInfo = ` · Budget: ${parseFloat(ethers.formatEther(remaining)).toFixed(3)} ETH left${overBudget ? ' ⚠️ OVER BUDGET' : ''}`;
+                }
+              } catch {}
+            }
+            hint.textContent = `≈ ${eth.toFixed(6)} ETH${usdStr} · ${high ? '⚠️ High-value alert' : 'Normal range'}${catInfo}`;
             hint.style.color = high ? 'var(--amber)' : 'var(--text-muted)';
           } catch {
             hint.textContent = 'Invalid amount';
