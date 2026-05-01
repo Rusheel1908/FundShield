@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+interface AggregatorV3Interface {
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+
+    function decimals() external view returns (uint8);
+}
+
 /**
  * @title FundShield
  * @notice On-chain treasury transparency with expense approval and suspicious spending flagging.
- * @dev Minimal dependency design; includes owner/auditor roles, expense workflow, and on-chain funds execution.
+ * @dev Uses Chainlink ETH/USD price feed for USD-denominated large-amount threshold detection.
  */
 contract FundShield {
     // ─────────────────────────────────────────────────────────────
@@ -39,7 +48,8 @@ contract FundShield {
     // ─────────────────────────────────────────────────────────────
 
     address public owner;
-    uint256 public largeAmountThreshold;
+    AggregatorV3Interface public priceFeed;
+    uint256 public largeAmountThresholdUSD; // 8-decimal USD, e.g. 10_000e8 = $10,000
     Expense[] private _expenses;
     mapping(address => bool) public auditors;
 
@@ -95,10 +105,11 @@ contract FundShield {
     // Constructor
     // ─────────────────────────────────────────────────────────────
 
-    constructor() {
+    constructor(address _priceFeed) {
         owner = msg.sender;
         auditors[msg.sender] = true;
-        largeAmountThreshold = 1_000 ether;
+        priceFeed = AggregatorV3Interface(_priceFeed);
+        largeAmountThresholdUSD = 10_000e8; // default $10,000
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -110,10 +121,10 @@ contract FundShield {
         emit AuditorUpdated(auditor, authorized);
     }
 
-    function setLargeAmountThreshold(uint256 newThreshold) external onlyOwner {
-        uint256 oldThreshold = largeAmountThreshold;
-        largeAmountThreshold = newThreshold;
-        emit LargeAmountThresholdUpdated(oldThreshold, newThreshold);
+    function setLargeAmountThresholdUSD(uint256 newThresholdUSD) external onlyOwner {
+        uint256 oldThreshold = largeAmountThresholdUSD;
+        largeAmountThresholdUSD = newThresholdUSD;
+        emit LargeAmountThresholdUpdated(oldThreshold, newThresholdUSD);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -262,6 +273,20 @@ contract FundShield {
         return _expenses.length;
     }
 
+    /// @notice Returns the latest ETH/USD price from Chainlink (8 decimals, e.g. 300000000000 = $3,000).
+    function getLatestETHPrice() public view returns (uint256) {
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        if (price <= 0) return 0;
+        return uint256(price);
+    }
+
+    /// @notice Converts a wei amount to USD value (8 decimals). Returns 0 if price feed unavailable.
+    function getAmountInUSD(uint256 weiAmount) public view returns (uint256) {
+        uint256 ethPrice = getLatestETHPrice();
+        if (ethPrice == 0) return 0;
+        return (weiAmount * ethPrice) / 1e18;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Internal helpers
     // ─────────────────────────────────────────────────────────────
@@ -269,7 +294,9 @@ contract FundShield {
     function _shouldFlag(uint256 amount, string calldata purpose) internal view returns (bool) {
         if (amount == 0) return true;
         if (bytes(purpose).length == 0) return true;
-        if (amount > largeAmountThreshold) return true;
+        uint256 amountInUSD = getAmountInUSD(amount);
+        // Skip USD check if price feed unavailable (avoids false-positives on feed outage)
+        if (amountInUSD > 0 && amountInUSD > largeAmountThresholdUSD) return true;
         return false;
     }
 

@@ -7,20 +7,29 @@ import {FundShield} from "../src/FundShield.sol";
 /**
  * @title DeployFundShield
  * @notice Foundry deployment script.
- *         Run against Anvil (local) or any live network by swapping
- *         the --rpc-url and --private-key flags in the CLI command.
+ *
+ * Chainlink ETH/USD price feed addresses:
+ *   Sepolia  : 0x694AA1769357215DE4FAC081bf1f309aDC325306
+ *   Mainnet  : 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+ *
+ * Override the feed address with the PRICE_FEED env var:
+ *   PRICE_FEED=0x... forge script script/FundShield.s.sol --rpc-url <RPC> --broadcast
  */
 contract DeployFundShield is Script {
+    // Sepolia ETH/USD feed — used as default when PRICE_FEED env var is not set
+    address internal constant SEPOLIA_ETH_USD = 0x694AA1769357215DE4FAC081bf1f309aDC325306;
+
     function run() external returns (FundShield fundShield) {
-        // `vm.startBroadcast()` without an argument uses the private key
-        // supplied via --private-key flag or the PRIVATE_KEY env variable.
+        address priceFeed = vm.envOr("PRICE_FEED", SEPOLIA_ETH_USD);
+
         vm.startBroadcast();
 
-        fundShield = new FundShield();
+        fundShield = new FundShield(priceFeed);
 
-        console.log("FundShield deployed at:", address(fundShield));
-        console.log("Owner:", fundShield.owner());
-        console.log("Large amount threshold:", fundShield.largeAmountThreshold());
+        console.log("FundShield deployed at  :", address(fundShield));
+        console.log("Owner                   :", fundShield.owner());
+        console.log("Price feed              :", address(fundShield.priceFeed()));
+        console.log("Large amount threshold  : $", fundShield.largeAmountThresholdUSD() / 1e8, "USD");
 
         vm.stopBroadcast();
     }
