@@ -1902,6 +1902,9 @@
     async function fetchData() {
       if (!contract) { showToast('error', '⚠️ Contract not connected.'); return; }
 
+      const tbody = document.getElementById('txBody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)"><span class="spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;margin-right:8px;vertical-align:middle"></span>Loading from blockchain…</td></tr>`;
+
       const KNOWN_CATS = ['operations', 'funding', 'events', 'marketing', 'infrastructure', 'other'];
 
       try {
@@ -2480,6 +2483,7 @@
        DEMO DATA INJECTION (for judging/demo without MetaMask)
     ===================================================== */
     window.loadDemoData = function () {
+      currentRole = 'admin';
       showToast('info', '🎭 Loading demo data…');
 
       // Pre-fill protocol state so all panels render correctly without a wallet
@@ -2519,15 +2523,11 @@
       ];
       flaggedTxns = allTxns.filter(t => t.flagged);
 
-      document.getElementById('connectPrompt').classList.add('hidden');
-      document.getElementById('dashboard').classList.remove('hidden');
-      animateStatCards();
-      applyRoleUI(currentRole);
+      showDashboard();
 
       document.getElementById('walletDisplay').textContent = '0xDEMO…0000 (demo mode)';
       document.getElementById('contractAddrDisplay').textContent = '0x03f50393…470D53';
       document.getElementById('networkDisplay').textContent = 'Demo Mode (Sepolia)';
-      document.getElementById('roleDisplay').textContent = currentRole.toUpperCase();
       document.getElementById('netDot').className = 'net-dot connected';
       document.getElementById('netLabel').textContent = 'Demo Mode';
 
