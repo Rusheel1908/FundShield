@@ -1630,8 +1630,9 @@
       {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"cancelExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
       {"inputs":[{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"}],"name":"submitExpense","outputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},
       {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"getExpense","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"},{"internalType":"uint256","name":"approvalCount","type":"uint256"}],"internalType":"struct FundShield.Expense","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"getFlaggedExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"flagged","type":"tuple[]"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"getPendingExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"pending","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"getFlaggedExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"},{"internalType":"uint256","name":"approvalCount","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"flagged","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"getPendingExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"},{"internalType":"uint256","name":"approvalCount","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"pending","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"start","type":"uint256"},{"internalType":"uint256","name":"count","type":"uint256"}],"name":"getExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"},{"internalType":"uint256","name":"approvalCount","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"expenses","type":"tuple[]"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"totalExpenses","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
       {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"auditors","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
@@ -1665,9 +1666,32 @@
     let currentRole = 'public';
     let allTxns = [];
     let flaggedTxns = [];
-    let ethPriceUSD = 0n;       // 8-decimal BigInt from Chainlink (e.g. 3000e8 = $3,000)
+    let ethPriceUSD = 0n;            // 8-decimal BigInt from Chainlink (e.g. 3000e8 = $3,000)
     let HIGH_THRESHOLD_USD = 10_000n * 100_000_000n; // $10,000 default (8 decimals)
-    let requiredApprovals = 1n; // quorum from contract
+    let requiredApprovals = 1n;      // quorum from contract
+    let velocityThresholdVal = 3n;   // max payments to same receiver in 7 days
+    let timeLockDelayVal = 172800n;  // 48 h in seconds
+    let categoryData = {};           // category → { budget, spent, remaining }
+
+    /* =====================================================
+       STATUS HELPERS — shared across renderTxTable / renderFlagged
+    ===================================================== */
+    const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
+    const STATUS_COLORS = { 0: 'var(--amber)', 1: 'var(--green)', 2: 'var(--cyan)', 3: 'var(--red)', 4: 'var(--red)' };
+
+    function getStatusInfo(status) {
+      const n = Number(status);
+      return { label: STATUS_ENUM[n] || 'Unknown', color: STATUS_COLORS[n] || 'var(--text-muted)' };
+    }
+
+    function getTimeLockHtml(unlockTs, nowTs) {
+      if (!unlockTs) return '';
+      if (nowTs < unlockTs) {
+        const h = Math.ceil((unlockTs - nowTs) / 3600);
+        return `<span style="font-size:10px;color:var(--amber);display:block;margin-top:3px;">⏳ Time-lock: ~${h}h remaining</span>`;
+      }
+      return `<span style="font-size:10px;color:var(--green);display:block;margin-top:3px;">🔓 Time-lock cleared</span>`;
+    }
 
     /* =====================================================
        STAGGER ANIMATIONS — stat cards
@@ -1841,13 +1865,10 @@
       if (addPanel) addPanel.classList.toggle('hidden', false);
 
       // Flagged + analytics + category budgets — admin & auditor only
-      const flaggedPanel = document.getElementById('flaggedPanel');
-      const analyticsPanel = document.getElementById('analyticsPanel');
-      const categoryPanel = document.getElementById('categoryBudgetPanel');
       const showFull = role === 'admin' || role === 'auditor';
-      if (flaggedPanel) flaggedPanel.classList.toggle('hidden', !showFull);
-      if (analyticsPanel) analyticsPanel.classList.toggle('hidden', !showFull);
-      if (categoryPanel) categoryPanel.classList.toggle('hidden', !showFull);
+      ['flaggedPanel', 'analyticsPanel', 'categoryBudgetPanel'].forEach(id => {
+        document.getElementById(id)?.classList.toggle('hidden', !showFull);
+      });
     }
 
     /* =====================================================
@@ -1856,39 +1877,65 @@
     async function fetchData() {
       if (!contract) { showToast('error', '⚠️ Contract not connected.'); return; }
 
+      const KNOWN_CATS = ['operations', 'funding', 'events', 'marketing', 'infrastructure', 'other'];
+
       try {
-        const [total, flagged, pending, thresholdUSD, ethPrice, reqApprovals] = await Promise.all([
+        // Round 1: scalar queries + flagged list in parallel
+        const [total, flagged, thresholdUSD, ethPrice, reqApprovals, velThresh, tlDelay] = await Promise.all([
           contract.totalExpenses(),
           contract.getFlaggedExpenses(),
-          contract.getPendingExpenses(),
           contract.largeAmountThresholdUSD(),
           contract.getLatestETHPrice(),
-          contract.requiredApprovals()
+          contract.requiredApprovals(),
+          contract.velocityThreshold(),
+          contract.timeLockDelay()
         ]);
         HIGH_THRESHOLD_USD = thresholdUSD;
         ethPriceUSD = ethPrice;
         requiredApprovals = reqApprovals;
+        velocityThresholdVal = velThresh;
+        timeLockDelayVal = tlDelay;
 
-        // Build allTxns by fetching each expense individually
-        allTxns = [];
-        for (let i = 0; i < Number(total); i++) {
-          try {
-            const [exp, unlock] = await Promise.all([
-              contract.getExpense(i),
-              contract.executeAfter(i)
-            ]);
-            allTxns.push({ ...exp, executeAfter: unlock });
-          } catch (e) {
-            console.warn(`Could not fetch expense ${i}:`, e);
-          }
-        }
+        // Round 2: all expenses in one call + all executeAfter + all category info in parallel
+        const n = Number(total);
+        const [exps, unlocks, catInfos] = await Promise.all([
+          contract.getExpenses(0, n),
+          Promise.all(Array.from({ length: n }, (_, i) => contract.executeAfter(i))),
+          Promise.all(KNOWN_CATS.map(c => contract.getCategoryInfo(c)))
+        ]);
 
-        flaggedTxns = flagged;
+        // Explicit property copy — ethers Result named getters are non-enumerable, spread loses them
+        allTxns = exps.map((exp, i) => ({
+          id: exp.id, requester: exp.requester, receiver: exp.receiver,
+          amount: exp.amount, purpose: exp.purpose, category: exp.category,
+          flagged: exp.flagged, status: exp.status, approver: exp.approver,
+          rejectReason: exp.rejectReason, createdAt: exp.createdAt, updatedAt: exp.updatedAt,
+          approvalCount: exp.approvalCount, executeAfter: unlocks[i]
+        }));
 
+        categoryData = {};
+        KNOWN_CATS.forEach((c, i) => {
+          categoryData[c] = { budget: catInfos[i][0], spent: catInfos[i][1], remaining: catInfos[i][2] };
+        });
+
+        // Map flagged results to plain objects and attach executeAfter from allTxns
+        flaggedTxns = flagged.map(exp => {
+          const match = allTxns.find(t => t.id === exp.id);
+          return {
+            id: exp.id, requester: exp.requester, receiver: exp.receiver,
+            amount: exp.amount, purpose: exp.purpose, category: exp.category,
+            flagged: exp.flagged, status: exp.status, approver: exp.approver,
+            rejectReason: exp.rejectReason, createdAt: exp.createdAt, updatedAt: exp.updatedAt,
+            approvalCount: exp.approvalCount, executeAfter: match?.executeAfter ?? 0n
+          };
+        });
+
+        updateContractInfoPanel();
         renderStats();
         renderTxTable();
         renderFlagged();
         renderAnalytics();
+        renderCategoryBudgets();
         showToast('success', `✅ Loaded ${allTxns.length} expense(s) from chain`);
       } catch (err) {
         console.error(err);
@@ -1960,14 +2007,11 @@
         return;
       }
 
-      const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
-
       tbody.innerHTML = allTxns.map((exp, i) => {
         const amtEth = parseFloat(ethers.formatEther(exp.amount));
         const isZero = exp.amount === 0n;
         const amtUSD = weiToUSD(exp.amount);
         const isHigh = amtUSD !== null && amtUSD > HIGH_THRESHOLD_USD;
-        const isEmpty = !exp.purpose || exp.purpose.trim() === '';
 
         const amtClass = isZero ? 'zero' : isHigh ? 'high' : 'normal';
         const usdSuffix = amtUSD !== null ? `<span style="font-size:9px;color:var(--text-muted);display:block">${formatUSD(amtUSD)}</span>` : '';
@@ -1975,8 +2019,7 @@
 
         const shortReq = exp.requester.slice(0, 6) + '…' + exp.requester.slice(-4);
         const shortRec = exp.receiver.slice(0, 6) + '…' + exp.receiver.slice(-4);
-        const statusLabel = STATUS_ENUM[Number(exp.status)] || 'Unknown';
-        const statusColor = exp.status == 1 ? 'var(--green)' : exp.status == 2 ? 'var(--cyan)' : exp.status == 3 || exp.status == 4 ? 'var(--red)' : 'var(--amber)';
+        const { label: statusLabel, color: statusColor } = getStatusInfo(exp.status);
 
         const approvalCount = exp.approvalCount !== undefined ? BigInt(exp.approvalCount) : 0n;
         const sigBadge = exp.status == 0
@@ -2036,6 +2079,7 @@
         return;
       }
 
+      const nowTs = Math.floor(Date.now() / 1000);
       list.innerHTML = flaggedTxns.map((exp, i) => {
         const amtEth = parseFloat(ethers.formatEther(exp.amount));
         const isZero = exp.amount === 0n;
@@ -2043,28 +2087,18 @@
         const isHigh = amtUSD !== null && amtUSD > HIGH_THRESHOLD_USD;
         const isEmpty = !exp.purpose || exp.purpose.trim() === '';
 
-        let reasons = [];
+        const reasons = [];
         if (isZero) reasons.push('Zero amount');
         if (isHigh) reasons.push('High-value (>' + formatUSD(HIGH_THRESHOLD_USD) + ')');
         if (isEmpty) reasons.push('Missing purpose');
-        // Velocity flag: receiver shows in flagged list — note the pattern
-        const windowCount = exp.flagged && !isZero && !isHigh && !isEmpty ? 'Repeat receiver' : null;
-        if (windowCount) reasons.push(windowCount);
+        if (exp.flagged && !isZero && !isHigh && !isEmpty) reasons.push('Repeat receiver');
         if (reasons.length === 0) reasons.push('Flagged by contract');
 
         const shortAddr = exp.receiver.slice(0, 8) + '…' + exp.receiver.slice(-6);
         const amtDisplay = isZero ? '0 ETH' : `${amtEth.toFixed(4)} ETH${amtUSD !== null ? '\n' + formatUSD(amtUSD) : ''}`;
 
-        const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
-        const statusLabel = STATUS_ENUM[Number(exp.status)] || 'Unknown';
-        const statusColor = exp.status == 1n ? 'var(--green)' : exp.status == 2n ? 'var(--cyan)' : exp.status == 3n || exp.status == 4n ? 'var(--red)' : 'var(--amber)';
-
-        const unlockTs = exp.executeAfter !== undefined ? Number(exp.executeAfter) : 0;
-        const nowTs = Math.floor(Date.now() / 1000);
-        const isLocked = unlockTs > 0 && nowTs < unlockTs;
-        const lockInfo = isLocked
-          ? `<span style="font-size:10px;color:var(--amber);display:block;margin-top:3px;">⏳ Time-lock: ~${Math.ceil((unlockTs - nowTs) / 3600)}h remaining</span>`
-          : (unlockTs > 0 ? `<span style="font-size:10px;color:var(--green);display:block;margin-top:3px;">🔓 Time-lock cleared</span>` : '');
+        const { label: statusLabel, color: statusColor } = getStatusInfo(exp.status);
+        const lockInfo = getTimeLockHtml(Number(exp.executeAfter ?? 0), nowTs);
 
         return `
       <div class="flagged-item" style="animation-delay:${i * 0.05}s">
@@ -2158,14 +2192,8 @@
       const velEl = document.getElementById('velThreshDisplay');
       const tlEl = document.getElementById('timeLockDisplay');
 
-      if (priceEl) {
-        priceEl.textContent = ethPriceUSD > 0n
-          ? '$' + (Number(ethPriceUSD) / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          : 'Unavailable';
-      }
-      if (flagEl) {
-        flagEl.textContent = '$' + (Number(HIGH_THRESHOLD_USD) / 1e8).toLocaleString('en-US', { maximumFractionDigits: 0 });
-      }
+      if (priceEl) priceEl.textContent = ethPriceUSD > 0n ? formatUSD(ethPriceUSD) : 'Unavailable';
+      if (flagEl) flagEl.textContent = formatUSD(HIGH_THRESHOLD_USD);
       if (quorumEl) {
         quorumEl.textContent = Number(requiredApprovals) + ' of N auditors';
       }
@@ -2496,7 +2524,6 @@
         return;
       }
 
-      const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
       const now = new Date().toISOString().slice(0, 10);
       const networkName = chainId ? (CONTRACTS[chainId]?.name || 'Unknown') : 'Demo';
       const contractAddr = chainId ? (CONTRACTS[chainId]?.address || 'N/A') : 'N/A';
