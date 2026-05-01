@@ -207,6 +207,8 @@ contract FundShieldTest is Test {
     }
 
     function test_MultiSig_CannotSignTwice() public {
+        fs.setRequiredApprovals(2);
+
         vm.prank(ALICE);
         uint256 id = fs.submitExpense(BOB, 1 ether, "pay vendor", "operations");
 
