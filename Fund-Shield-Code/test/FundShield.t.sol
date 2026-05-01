@@ -234,8 +234,6 @@ contract FundShieldTest is Test {
         fs.setRequiredApprovals(0);
     }
 
-    // ─── Category spending caps ─────────────────────────────────
-
     // ─── Time-lock ──────────────────────────────────────────────
 
     function test_TimeLock_CleanExpenseExecutesImmediately() public {
