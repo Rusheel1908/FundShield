@@ -2092,6 +2092,53 @@
     }
 
     /* =====================================================
+       APPROVE / REJECT / EXECUTE ACTIONS
+    ===================================================== */
+    async function approveExpense(id) {
+      if (!contract || !signer) { showToast('error', '⚠️ Wallet not connected.'); return; }
+      try {
+        showToast('info', `⏳ Signing expense #${id}…`);
+        const tx = await contract.approveExpense(BigInt(id));
+        await tx.wait();
+        showToast('success', `✅ Expense #${id} signed.`);
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showToast('error', '❌ ' + (err.reason || err.message || 'Sign failed'));
+      }
+    }
+
+    async function rejectExpense(id) {
+      if (!contract || !signer) { showToast('error', '⚠️ Wallet not connected.'); return; }
+      const reason = window.prompt(`Rejection reason for expense #${id}:`);
+      if (!reason || !reason.trim()) { showToast('error', '⚠️ Reason required to reject.'); return; }
+      try {
+        showToast('info', `⏳ Rejecting expense #${id}…`);
+        const tx = await contract.rejectExpense(BigInt(id), reason.trim());
+        await tx.wait();
+        showToast('success', `✅ Expense #${id} rejected.`);
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showToast('error', '❌ ' + (err.reason || err.message || 'Reject failed'));
+      }
+    }
+
+    async function executeExpense(id) {
+      if (!contract || !signer) { showToast('error', '⚠️ Wallet not connected.'); return; }
+      try {
+        showToast('info', `⏳ Executing expense #${id}…`);
+        const tx = await contract.executeExpense(BigInt(id));
+        await tx.wait();
+        showToast('success', `✅ Expense #${id} executed and funds transferred.`);
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showToast('error', '❌ ' + (err.reason || err.message || 'Execute failed'));
+      }
+    }
+
+    /* =====================================================
        SUBMIT MODAL
     ===================================================== */
     function openSubmitModal() {
