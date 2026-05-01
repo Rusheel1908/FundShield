@@ -1448,10 +1448,10 @@
                   <input type="text" class="form-input" id="inpAddr" placeholder="0x..." />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Amount (in Wei)</label>
-                  <input type="number" class="form-input" id="inpAmount" placeholder="e.g. 1000000000000000000"
-                    min="0" />
-                  <div class="form-hint" id="amtHint">≈ 0 ETH · Normal range</div>
+                  <label class="form-label">Amount (ETH)</label>
+                  <input type="number" class="form-input" id="inpAmount" placeholder="e.g. 1.5"
+                    min="0" step="any" />
+                  <div class="form-hint" id="amtHint">0 ETH · Normal range</div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Purpose / Description</label>
@@ -1724,14 +1724,34 @@
 
         setupContract();
         updateNavWallet();
+
+        if (contract) {
+          try {
+            const [ownerAddr, isAuditor] = await Promise.all([
+              contract.owner(),
+              contract.auditors(walletAddr)
+            ]);
+            currentRole = walletAddr.toLowerCase() === ownerAddr.toLowerCase() ? 'admin'
+                        : isAuditor ? 'auditor'
+                        : 'public';
+          } catch { currentRole = 'public'; }
+        }
+
         showDashboard();
         fetchData();
         startBlockListener();
 
-        window.ethereum.on('accountsChanged', (accs) => {
+        window.ethereum.on('accountsChanged', async (accs) => {
           walletAddr = accs[0] || null;
           if (!walletAddr) { disconnectUI(); return; }
+          if (contract) {
+            try {
+              const [ownerAddr, isAuditor] = await Promise.all([contract.owner(), contract.auditors(walletAddr)]);
+              currentRole = walletAddr.toLowerCase() === ownerAddr.toLowerCase() ? 'admin' : isAuditor ? 'auditor' : 'public';
+            } catch { currentRole = 'public'; }
+          }
           updateNavWallet();
+          showDashboard();
           fetchData();
         });
         window.ethereum.on('chainChanged', () => window.location.reload());
@@ -1783,7 +1803,7 @@
        PUBLIC READ-ONLY VIEW (no wallet)
     ===================================================== */
     const PUBLIC_RPC = {
-      11155111: 'https://rpc.sepolia.org',
+      11155111: 'https://ethereum-sepolia-rpc.publicnode.com',
       31337: 'http://127.0.0.1:8545'
     };
 
@@ -1835,6 +1855,11 @@
       document.getElementById('connectPrompt').classList.add('hidden');
       document.getElementById('dashboard').classList.remove('hidden');
       animateStatCards();
+      const badge = document.getElementById('roleBadge');
+      if (badge) { badge.className = 'role-badge ' + currentRole; badge.textContent = currentRole.toUpperCase(); }
+      const roleDisp = document.getElementById('roleDisplay');
+      if (roleDisp) roleDisp.textContent = currentRole.toUpperCase();
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === currentRole));
       applyRoleUI(currentRole);
     }
 
@@ -2260,10 +2285,10 @@
       if (!contract) { showToast('error', '⚠️ Not connected to contract.'); return; }
 
       const addr = document.getElementById('inpAddr').value.trim();
-      const amtWei = document.getElementById('inpAmount').value.trim();
+      const amtEthStr = document.getElementById('inpAmount').value.trim();
       const purpose = document.getElementById('inpPurpose').value.trim();
 
-      if (!addr || !amtWei) {
+      if (!addr || !amtEthStr) {
         showToast('error', '⚠️ Recipient and amount are required.');
         return;
       }
@@ -2272,8 +2297,11 @@
         return;
       }
 
-      const amtBig = BigInt(amtWei);
-      const amtEth = parseFloat(ethers.formatEther(amtBig)).toFixed(6);
+      let amtBig;
+      try { amtBig = ethers.parseEther(amtEthStr); } catch {
+        showToast('error', '⚠️ Invalid ETH amount (e.g. 1.5).'); return;
+      }
+      const amtEth = parseFloat(amtEthStr).toFixed(6);
 
       const isZero = amtBig === 0n;
       const amtUSDModal = weiToUSD(amtBig);
@@ -2288,7 +2316,7 @@
       const usdLine = amtUSDModal !== null ? ` ≈ ${formatUSD(amtUSDModal)}` : '';
       document.getElementById('modalDetail').innerHTML = `
     <span>Recipient:</span> ${addr}<br>
-    <span>Amount:</span> ${amtEth} ETH${usdLine} (${amtWei} Wei)<br>
+    <span>Amount:</span> ${amtEth} ETH${usdLine}<br>
     <span>Purpose:</span> ${purpose || '(empty)'}<br>
     ${warnings ? `<br><span style="color:var(--amber)">${warnings.trim()}</span>` : '<br><span style="color:var(--green)">✅ Transaction appears clean</span>'}
   `;
@@ -2310,7 +2338,7 @@
 
     async function submitTransaction() {
       const addr = document.getElementById('inpAddr').value.trim();
-      const amtWei = document.getElementById('inpAmount').value.trim();
+      const amtEthStr = document.getElementById('inpAmount').value.trim();
       const purpose = document.getElementById('inpPurpose').value.trim();
       const category = document.getElementById('inpCategory').value.trim();
       const btn = document.getElementById('confirmBtn');
@@ -2319,7 +2347,7 @@
       btn.innerHTML = '<span class="spinner"></span> Submitting…';
 
       try {
-        const tx = await contract.submitExpense(addr, BigInt(amtWei), purpose, category);
+        const tx = await contract.submitExpense(addr, ethers.parseEther(amtEthStr), purpose, category);
         showToast('info', '⏳ Transaction submitted. Waiting for confirmation…');
 
         document.getElementById('modalTitle').textContent = 'Transaction Pending';
@@ -2370,14 +2398,14 @@
         amtInput.addEventListener('input', async () => {
           const hint = document.getElementById('amtHint');
           const val = amtInput.value.trim();
-          if (!val || val === '0') {
-            hint.textContent = '≈ 0 ETH · ⚠️ Will be FLAGGED (zero amount)';
+          if (!val || parseFloat(val) === 0) {
+            hint.textContent = '0 ETH · ⚠️ Will be FLAGGED (zero amount)';
             hint.style.color = 'var(--red)';
             return;
           }
           try {
-            const weiVal = BigInt(val);
-            const eth = parseFloat(ethers.formatEther(weiVal));
+            const weiVal = ethers.parseEther(val);
+            const eth = parseFloat(val);
             const usd = weiToUSD(weiVal);
             const high = usd !== null && usd > HIGH_THRESHOLD_USD;
             const usdStr = usd !== null ? ` · ${formatUSD(usd)}` : '';
@@ -2394,10 +2422,10 @@
                 }
               } catch {}
             }
-            hint.textContent = `≈ ${eth.toFixed(6)} ETH${usdStr} · ${high ? '⚠️ High-value alert' : 'Normal range'}${catInfo}`;
+            hint.textContent = `${eth.toFixed(6)} ETH${usdStr} · ${high ? '⚠️ High-value alert' : 'Normal range'}${catInfo}`;
             hint.style.color = high ? 'var(--amber)' : 'var(--text-muted)';
           } catch {
-            hint.textContent = 'Invalid amount';
+            hint.textContent = 'Invalid ETH amount (e.g. 1.5)';
             hint.style.color = 'var(--red)';
           }
         });
