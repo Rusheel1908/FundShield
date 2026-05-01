@@ -15,9 +15,6 @@
   <!-- ethers.js v6 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
 
-  <!-- Framer Motion (via CDN bundle) -->
-  <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.js"></script>
-
   <style>
     /* ============================================
    DESIGN TOKENS & RESET
@@ -1339,7 +1336,7 @@
         <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);width:100%;max-width:440px">
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">🌐 Public read-only view — no wallet needed</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
-            <select id="publicNetwork" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:var(--font-mono)">
+            <select id="publicNetwork" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:var(--font-mono)">
               <option value="11155111">Sepolia Testnet</option>
               <option value="31337">Anvil Local</option>
             </select>
@@ -1936,7 +1933,7 @@
     async function fetchData() {
       if (!contract) { showToast('error', '⚠️ Contract not connected.'); return; }
 
-      const tbody = document.getElementById('txBody');
+      const tbody = document.getElementById('txTableBody');
       if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)"><span class="spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;margin-right:8px;vertical-align:middle"></span>Loading from blockchain…</td></tr>`;
 
       const KNOWN_CATS = ['operations', 'funding', 'events', 'marketing', 'infrastructure', 'other'];
