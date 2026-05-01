@@ -1,8 +1,22 @@
 # FundShield
 
-A hackathon-ready on-chain treasury transparency system built with **Solidity + Foundry**.
+On-chain public fund transparency system built with **Solidity + Foundry + ethers.js v6**.
 
-`FundShield` now supports a full expense approval workflow with owner and auditor roles, on-chain funds deposits, and automatic suspicious expense flagging.
+Live on Sepolia: `0x03f50393d76E84D6f7C150C4e00836D1C3470D53`
+
+---
+
+## Features
+
+| # | Feature | Description |
+|---|---|---|
+| 1 | **Chainlink USD Fraud Detection** | Expenses above $10,000 (live ETH/USD price feed) are automatically flagged |
+| 2 | **Multi-Sig Quorum Approval** | Configurable number of auditor signatures required before any expense is approved |
+| 3 | **48h Time-Lock on Flagged Expenses** | Flagged expenses cannot be executed until 48 hours after approval — prevents rushed fraud |
+| 4 | **Category Spending Caps** | Owner sets per-category ETH budgets; over-budget submissions are flagged at submit time |
+| 5 | **Velocity / Repeat-Receiver Flagging** | More than 3 payments to the same address in 7 days triggers automatic flagging |
+| 6 | **Role-Based Access Control** | Owner, auditor, and public roles with on-chain enforcement via custom errors |
+| 7 | **Paginated Expense Ledger** | `getExpenses(start, count)` for efficient dashboard reads without N+1 RPC calls |
 
 ---
 
@@ -11,32 +25,16 @@ A hackathon-ready on-chain treasury transparency system built with **Solidity + 
 ```
 .
 ├── src/
-│   └── FundShield.sol          # Main treasury contract
+│   └── FundShield.sol          # Main treasury contract (426 lines)
 ├── test/
-│   └── FundShield.t.sol        # Foundry tests for workflow, roles, and flagging
+│   └── FundShield.t.sol        # 35 Foundry tests — all passing
 ├── script/
-│   └── FundShield.s.sol        # Foundry deployment script
+│   └── FundShield.s.sol        # Deployment script
+├── Frontend/
+│   └── index.html              # Single-file SPA (vanilla JS + ethers.js v6)
 ├── foundry.toml
 └── README.md
 ```
-
-> `README (2).md` has been removed to keep the project documentation single-sourced.
-
----
-
-## What FundShield Does
-
-FundShield lets a team record and manage expense requests on-chain with:
-
-- `depositFunds()` to fund the contract
-- `submitExpense()` to request spend approval
-- `approveExpense()` / `rejectExpense()` by authorized auditors
-- `executeExpense()` to pay approved expenses
-- `cancelExpense()` to withdraw pending requests
-- automatic `flagged` detection for suspicious requests
-- read APIs for pending, flagged, and paginated expenses
-
-This is now a real treasury transparency product, not just a logging demo.
 
 ---
 
@@ -44,9 +42,9 @@ This is now a real treasury transparency product, not just a logging demo.
 
 | Role | Permission |
 |---|---|
-| `owner` | deployer; can execute approved expenses, update thresholds, and manage auditors |
-| `auditor` | can approve or reject expense requests |
-| `requester` | any address can submit and cancel pending expenses |
+| `owner` | Deployer. Can execute approved expenses, update thresholds, manage auditors, set quorum |
+| `auditor` | Can approve or reject expense requests |
+| `anyone` | Can submit expenses, cancel their own pending requests, read all data |
 
 ---
 
@@ -58,10 +56,10 @@ This is now a real treasury transparency product, not just a logging demo.
 forge build
 ```
 
-### Run tests
+### Run tests (35 tests)
 
 ```bash
-forge test
+forge test -vvv
 ```
 
 ### Format
@@ -69,6 +67,20 @@ forge test
 ```bash
 forge fmt
 ```
+
+---
+
+## Deployed Contract — Sepolia
+
+| Field | Value |
+|---|---|
+| Address | `0x03f50393d76E84D6f7C150C4e00836D1C3470D53` |
+| Network | Ethereum Sepolia testnet |
+| ETH/USD Feed | `0x694AA1769357215DE4FAC081bf1f309aDC325306` (Chainlink) |
+| Default quorum | 1 auditor signature |
+| Default flag threshold | $10,000 USD |
+| Time-lock delay | 48 hours |
+| Velocity window | 7 days / 3 payments |
 
 ---
 
@@ -95,14 +107,14 @@ forge script script/FundShield.s.sol:DeployFundShield \
 cast send <CONTRACT_ADDRESS> "depositFunds()" \
   --rpc-url http://127.0.0.1:8545 \
   --private-key <ANVIL_PRIVATE_KEY> \
-  --value 1000000000000000000
+  --value 1ether
 ```
 
 4. Submit an expense:
 
 ```bash
 cast send <CONTRACT_ADDRESS> "submitExpense(address,uint256,string,string)" \
-  <RECEIVER_ADDRESS> 1000000000000000000 "Q1 payroll" "operations" \
+  <RECEIVER_ADDRESS> 1ether "Q1 payroll" "operations" \
   --rpc-url http://127.0.0.1:8545 \
   --private-key <ANVIL_PRIVATE_KEY>
 ```
@@ -144,7 +156,11 @@ forge script script/FundShield.s.sol:DeployFundShield \
 ### Governance
 
 - `setAuditor(address auditor, bool authorized)`
-- `setLargeAmountThreshold(uint256 newThreshold)`
+- `setRequiredApprovals(uint256 n)`
+- `setLargeAmountThresholdUSD(uint256 newThreshold)`
+- `setCategoryBudget(string calldata category, uint256 budget)`
+- `setVelocityThreshold(uint256 n)`
+- `setTimeLockDelay(uint256 seconds_)`
 
 ### Funds
 
@@ -161,44 +177,60 @@ forge script script/FundShield.s.sol:DeployFundShield \
 ### Views
 
 - `getExpense(uint256 id)`
-- `getExpenses(uint256 start, uint256 count)`
+- `getExpenses(uint256 start, uint256 count)` — paginated batch read
 - `getFlaggedExpenses()`
 - `getPendingExpenses()`
 - `totalExpenses()`
+- `hasApproved(uint256 id, address auditor)`
+- `executeAfter(uint256 id)`
+- `getCategoryInfo(string calldata category)` → `(budget, spent, remaining)`
+- `getLatestETHPrice()` — Chainlink feed
+- `getAmountInUSD(uint256 weiAmount)` — on-chain USD conversion
 
 ---
 
 ## Suspicious Expense Flagging
 
-An expense is flagged when:
+An expense is flagged automatically when **any** of these conditions fire at submit time:
 
-- `amount == 0`
-- purpose is empty
-- `amount > largeAmountThreshold`
+| Condition | Trigger |
+|---|---|
+| Zero amount | `amount == 0` |
+| Empty purpose | `bytes(purpose).length == 0` |
+| High USD value | `getAmountInUSD(amount) > largeAmountThresholdUSD` (Chainlink) |
+| Over category budget | `categorySpent[cat] + amount > categoryBudget[cat]` |
+| Velocity breach | receiver received ≥ `velocityThreshold` payments in the last 7 days |
 
-This is visible in the expense record and can be used to drive a dashboard or auditor workflow.
+Flagged expenses are time-locked for 48 hours after approval before execution is permitted.
 
 ---
 
 ## Testing
 
-Use Foundry to run the workflow tests:
-
 ```bash
-forge test
+forge test -vvv
 ```
 
-The current suite covers:
+35 tests covering:
 
-- expense submission and flagging
-- auditor approval and rejection
-- execution of approved expenses
-- pending expense queries
-- owner and auditor access control
+- Price feed integration and USD conversion
+- Expense submission, flagging (zero, empty purpose, high USD, over-budget, velocity)
+- Auditor approval, rejection, cancellation
+- Multi-sig: quorum enforcement, double-sign prevention, `hasApproved` tracking
+- Time-lock: immediate execution for clean, 48h lock for flagged
+- Category budget: set/read, over-budget flag, spent tracking on execution
+- Velocity window: below threshold, above threshold, 7-day reset
+- Access control: `OnlyAuditor`, `InvalidQuorum`, `AlreadySigned`, `TimeLockActive`
+- Paginated reads: `getPendingExpenses`
 
 ---
 
-## Notes
+## Frontend
 
-- `README (2).md` has been removed to avoid duplicate documentation.
-- Keep `out/`, `cache/`, `broadcast/`, and generated build artifacts out of source control where possible.
+Single-file SPA at `Frontend/index.html`. No build step — open directly in browser or serve statically.
+
+- Auto-detects wallet role (admin/auditor/public) on MetaMask connect
+- Public read-only mode via Sepolia JSON-RPC (no wallet required)
+- Demo mode with pre-seeded data for judging without MetaMask
+- Batched RPC: 2 parallel rounds instead of N sequential calls
+- CSV export of full expense ledger
