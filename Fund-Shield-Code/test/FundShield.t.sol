@@ -207,13 +207,19 @@ contract FundShieldTest is Test {
     }
 
     function test_MultiSig_CannotSignTwice() public {
-        vm.prank(ALICE);
-        uint256 id = fs.submitExpense(BOB, 1 ether, "pay vendor", "operations");
+        // Need quorum > 1 so the first approval keeps the expense in Pending;
+        // otherwise it transitions to Approved and the second call reverts with
+        // InvalidStatus instead of AlreadySigned.
+        fs.setAuditor(ALICE, true);
+        fs.setRequiredApprovals(2);
 
-        fs.approveExpense(id);
+        vm.prank(BOB);
+        uint256 id = fs.submitExpense(address(0xDEAD), 1 ether, "pay vendor", "operations");
+
+        fs.approveExpense(id); // first signature — expense stays Pending (needs 2)
 
         vm.expectRevert(abi.encodeWithSelector(FundShield.AlreadySigned.selector, id, address(this)));
-        fs.approveExpense(id);
+        fs.approveExpense(id); // same auditor signs again → AlreadySigned
     }
 
     function test_MultiSig_HasApprovedTracksCorrectly() public {
