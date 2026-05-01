@@ -1840,12 +1840,14 @@
       const addPanel = document.getElementById('addTxPanel');
       if (addPanel) addPanel.classList.toggle('hidden', false);
 
-      // Flagged + analytics — admin & auditor only
+      // Flagged + analytics + category budgets — admin & auditor only
       const flaggedPanel = document.getElementById('flaggedPanel');
       const analyticsPanel = document.getElementById('analyticsPanel');
+      const categoryPanel = document.getElementById('categoryBudgetPanel');
       const showFull = role === 'admin' || role === 'auditor';
       if (flaggedPanel) flaggedPanel.classList.toggle('hidden', !showFull);
       if (analyticsPanel) analyticsPanel.classList.toggle('hidden', !showFull);
+      if (categoryPanel) categoryPanel.classList.toggle('hidden', !showFull);
     }
 
     /* =====================================================
