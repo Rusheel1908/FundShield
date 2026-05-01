@@ -465,6 +465,40 @@
       }
     }
 
+    @media (max-width: 600px) {
+      nav {
+        padding: 0 16px;
+        gap: 8px;
+      }
+      .nav-subtitle { display: none; }
+      .net-badge { display: none; }
+      #statusBar { display: none; }
+
+      .main-content {
+        padding: 16px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .stat-value { font-size: 26px; }
+      .stat-card { padding: 14px 16px; }
+
+      .panel { padding: 16px; }
+      .panel-header { flex-wrap: wrap; gap: 8px; }
+
+      .form-row { flex-direction: column; }
+
+      .role-switcher { flex-wrap: wrap; gap: 4px; }
+      .role-btn { font-size: 10px; padding: 4px 10px; }
+    }
+
+    @media (max-width: 400px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .stat-value { font-size: 22px; }
+    }
+
     /* ============================================
    PANEL / CARD
 ============================================ */
