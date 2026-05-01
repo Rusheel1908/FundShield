@@ -2102,6 +2102,39 @@
     }
 
     /* =====================================================
+       CATEGORY BUDGETS PANEL
+    ===================================================== */
+    function renderCategoryBudgets() {
+      const body = document.getElementById('categoryBudgetBody');
+      if (!body) return;
+
+      const active = Object.entries(categoryData).filter(([, info]) => info.budget > 0n);
+
+      if (active.length === 0) {
+        body.innerHTML = `<div class="empty-state" style="padding:12px 0;"><p style="font-size:12px;">No category caps set.</p></div>`;
+        return;
+      }
+
+      body.innerHTML = active.map(([cat, info]) => {
+        const budgetEth = parseFloat(ethers.formatEther(info.budget));
+        const spentEth = parseFloat(ethers.formatEther(info.spent));
+        const pct = budgetEth > 0 ? Math.min((spentEth / budgetEth) * 100, 100) : 0;
+        const isOver = info.spent > info.budget;
+        const barColor = isOver ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--green)';
+        return `
+        <div style="margin-bottom:2px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:11px;text-transform:capitalize;color:var(--text-secondary)">${cat}</span>
+            <span style="font-size:10px;font-family:var(--font-mono);color:${barColor}">${spentEth.toFixed(3)} / ${budgetEth.toFixed(3)} ETH${isOver ? ' ⚠️' : ''}</span>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${pct.toFixed(1)}%;background:${barColor};transition:width 0.6s ease;border-radius:2px;"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    /* =====================================================
        CONTRACT INFO PANEL — live Chainlink + protocol settings
     ===================================================== */
     function updateContractInfoPanel() {
