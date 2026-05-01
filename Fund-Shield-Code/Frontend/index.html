@@ -1593,7 +1593,7 @@
       },
       // Sepolia testnet
       11155111: {
-        address: '0xYOUR_SEPOLIA_CONTRACT_ADDRESS_HERE',
+        address: '0x47DD04F6349f41AD689853baF10162Bc2E51703d',
         name: 'Sepolia Testnet'
       }
     };
@@ -1761,11 +1761,13 @@
       if (!contract) { showToast('error', '⚠️ Contract not connected.'); return; }
 
       try {
-        const [total, flagged, pending] = await Promise.all([
+        const [total, flagged, pending, threshold] = await Promise.all([
           contract.totalExpenses(),
           contract.getFlaggedExpenses(),
-          contract.getPendingExpenses()
+          contract.getPendingExpenses(),
+          contract.largeAmountThreshold()
         ]);
+        HIGH_THRESHOLD = threshold;
 
         // Build allTxns by fetching each expense individually
         allTxns = [];
@@ -1794,7 +1796,7 @@
     /* =====================================================
        RENDER STATS
     ===================================================== */
-    const HIGH_THRESHOLD = ethers.parseEther('10'); // 10 ETH
+    let HIGH_THRESHOLD = ethers.parseEther('1000'); // mirrors contract default largeAmountThreshold
 
     function renderStats() {
       const total = allTxns.length;
@@ -1969,10 +1971,6 @@
        SUBMIT MODAL
     ===================================================== */
     function openSubmitModal() {
-      if (currentRole !== 'admin') {
-        showToast('error', '🔒 Admin role required to add transactions.');
-        return;
-      }
       if (!contract) { showToast('error', '⚠️ Not connected to contract.'); return; }
 
       const addr = document.getElementById('inpAddr').value.trim();
@@ -2026,13 +2024,14 @@
       const addr = document.getElementById('inpAddr').value.trim();
       const amtWei = document.getElementById('inpAmount').value.trim();
       const purpose = document.getElementById('inpPurpose').value.trim();
+      const category = document.getElementById('inpCategory').value.trim();
       const btn = document.getElementById('confirmBtn');
 
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Submitting…';
 
       try {
-        const tx = await contract.addTransaction(addr, BigInt(amtWei), purpose);
+        const tx = await contract.submitExpense(addr, BigInt(amtWei), purpose, category);
         showToast('info', '⏳ Transaction submitted. Waiting for confirmation…');
 
         document.getElementById('modalTitle').textContent = 'Transaction Pending';
@@ -2058,6 +2057,7 @@
         document.getElementById('inpAddr').value = '';
         document.getElementById('inpAmount').value = '';
         document.getElementById('inpPurpose').value = '';
+        document.getElementById('inpCategory').value = '';
 
       } catch (err) {
         console.error(err);
@@ -2150,14 +2150,28 @@
     window.loadDemoData = function () {
       showToast('info', '🎭 Loading demo data…');
 
-      // Simulated transactions (mimic contract struct)
+      // Simulated transactions matching contract Expense struct
+      const demoMaker = (id, req, rec, amt, purpose, category, flagged, status) => ({
+        id: BigInt(id),
+        requester: req,
+        receiver: rec,
+        amount: amt,
+        purpose,
+        category,
+        flagged,
+        status: BigInt(status), // 0=Pending,1=Approved,2=Executed,3=Rejected,4=Cancelled
+        approver: '0x0000000000000000000000000000000000000000',
+        rejectReason: '',
+        createdAt: BigInt(Math.floor(Date.now() / 1000) - 86400),
+        updatedAt: BigInt(Math.floor(Date.now() / 1000))
+      });
       allTxns = [
-        { recipient: '0xAbCd1234567890EFabcd1234567890efABCD1234', amount: ethers.parseEther('2.5'), purpose: 'Infrastructure Grant Q2', flagged: false },
-        { recipient: '0x1111222233334444555566667777888899990000', amount: 0n, purpose: '', flagged: true },
-        { recipient: '0xDeAdBeEf00000000000000000000000000000001', amount: ethers.parseEther('50.0'), purpose: 'Emergency Relief Fund', flagged: true },
-        { recipient: '0xFaCeB00c0000000000000000000000000000CAFE', amount: ethers.parseEther('1.2'), purpose: 'School Renovation', flagged: false },
-        { recipient: '0x0000000000000000000000000000000000000042', amount: ethers.parseEther('0.05'), purpose: '', flagged: true },
-        { recipient: '0xBaBaFaceBaBaFace000000000000000000000001', amount: ethers.parseEther('3.0'), purpose: 'Road Maintenance Batch 7', flagged: false },
+        demoMaker(0, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xAbCd1234567890EFabcd1234567890efABCD1234', ethers.parseEther('2.5'),  'Infrastructure Grant Q2', 'infrastructure', false, 1),
+        demoMaker(1, '0xAdmin1234567890EFabcd1234567890efABCD00', '0x1111222233334444555566667777888899990000', 0n,                         '',                       'operations',     true,  0),
+        demoMaker(2, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xDeAdBeEf00000000000000000000000000000001', ethers.parseEther('1200'), 'Emergency Relief Fund',  'funding',        true,  0),
+        demoMaker(3, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xFaCeB00c0000000000000000000000000000CAFE', ethers.parseEther('1.2'),  'School Renovation',      'events',         false, 2),
+        demoMaker(4, '0xAdmin1234567890EFabcd1234567890efABCD00', '0x0000000000000000000000000000000000000042', ethers.parseEther('0.05'), '',                       'marketing',      true,  3),
+        demoMaker(5, '0xAdmin1234567890EFabcd1234567890efABCD00', '0xBaBaFaceBaBaFace000000000000000000000001', ethers.parseEther('3.0'),  'Road Maintenance Batch 7','infrastructure', false, 0),
       ];
       flaggedTxns = allTxns.filter(t => t.flagged);
 
