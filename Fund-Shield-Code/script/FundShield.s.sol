@@ -19,7 +19,8 @@ contract DeployFundShield is Script {
         fundShield = new FundShield();
 
         console.log("FundShield deployed at:", address(fundShield));
-        console.log("LARGE_AMOUNT_THRESHOLD:", fundShield.LARGE_AMOUNT_THRESHOLD());
+        console.log("Owner:", fundShield.owner());
+        console.log("Large amount threshold:", fundShield.largeAmountThreshold());
 
         vm.stopBroadcast();
     }

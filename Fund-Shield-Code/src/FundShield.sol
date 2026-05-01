@@ -3,197 +3,278 @@ pragma solidity ^0.8.20;
 
 /**
  * @title FundShield
- * @notice On-chain fund transparency system.
- *         Every transaction is stored permanently and automatically
- *         flagged when it matches any suspicious-activity rule.
- * @dev Minimal, demo-focused — no access control, no upgradeability,
- *      no external dependencies. Readability > gas optimisation.
+ * @notice On-chain treasury transparency with expense approval and suspicious spending flagging.
+ * @dev Minimal dependency design; includes owner/auditor roles, expense workflow, and on-chain funds execution.
  */
 contract FundShield {
-    // ─────────────────────────────────────────────────────────────
-    // Constants
-    // ─────────────────────────────────────────────────────────────
-
-    /**
-     * @notice Transactions whose `amount` exceeds this value are flagged.
-     * @dev    1 000 ETH (in wei). Chosen because legitimate operational
-     *         transfers for a fund of typical hackathon / small-org size
-     *         are very unlikely to exceed this in a single transaction.
-     *         Adjust to your organisation's risk appetite before mainnet use.
-     */
-    uint256 public constant LARGE_AMOUNT_THRESHOLD = 1_000 ether;
-
     // ─────────────────────────────────────────────────────────────
     // Types
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * @notice Represents a single fund transfer recorded on-chain.
-     * @param id        Auto-incrementing index (0-based).
-     * @param sender    EOA or contract that called addTransaction().
-     * @param receiver  Intended destination of the funds.
-     * @param amount    Value in wei.
-     * @param purpose   Human-readable description of the transfer.
-     * @param flagged   True when any suspicious-activity rule fires.
-     * @param timestamp Block timestamp at record time (seconds since epoch).
-     */
-    struct Transaction {
+    enum Status {
+        Pending,
+        Approved,
+        Executed,
+        Rejected,
+        Cancelled
+    }
+
+    struct Expense {
         uint256 id;
-        address sender;
+        address requester;
         address receiver;
         uint256 amount;
-        string  purpose;
-        bool    flagged;
-        uint256 timestamp;
+        string purpose;
+        string category;
+        bool flagged;
+        Status status;
+        address approver;
+        string rejectReason;
+        uint256 createdAt;
+        uint256 updatedAt;
     }
 
     // ─────────────────────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────────────────────
 
-    /// @notice Full history; index == transaction id.
-    Transaction[] private _transactions;
+    address public owner;
+    uint256 public largeAmountThreshold;
+    Expense[] private _expenses;
+    mapping(address => bool) public auditors;
 
     // ─────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * @notice Emitted every time a transaction is recorded.
-     * @param id       The new transaction's id.
-     * @param sender   Who submitted the record.
-     * @param receiver Intended fund destination.
-     * @param amount   Value in wei.
-     * @param purpose  Transfer description.
-     * @param flagged  Whether the record triggered a flag.
-     */
-    event TransactionLogged(
+    event FundsDeposited(address indexed sender, uint256 amount);
+    event AuditorUpdated(address indexed auditor, bool authorized);
+    event LargeAmountThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
+    event ExpenseSubmitted(
         uint256 indexed id,
-        address indexed sender,
+        address indexed requester,
         address indexed receiver,
         uint256 amount,
-        string  purpose,
-        bool    flagged
+        string purpose,
+        string category,
+        bool flagged
     );
+    event ExpenseApproved(uint256 indexed id, address indexed approver);
+    event ExpenseRejected(uint256 indexed id, address indexed approver, string reason);
+    event ExpenseExecuted(uint256 indexed id, address indexed executor, uint256 amount);
+    event ExpenseCancelled(uint256 indexed id, address indexed requester);
 
     // ─────────────────────────────────────────────────────────────
-    // Write functions
+    // Errors
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * @notice Record a new fund transaction and apply flagging rules.
-     *
-     * Flagging rules (any one suffices):
-     *   1. amount == 0            — zero-value transfer is meaningless / suspicious.
-     *   2. purpose is empty       — undocumented transfer is a transparency red flag.
-     *   3. amount > LARGE_AMOUNT_THRESHOLD — unusually large single transfer.
-     *
-     * @dev Zero-address receiver is intentionally ALLOWED here so the contract
-     *      can record burn-style transfers or donations to the zero address.
-     *      It is NOT flagged on its own; callers should use a non-empty purpose
-     *      string to document the intent. This keeps the contract minimal and
-     *      avoids encoding policy that differs by organisation.
-     *
-     * @param receiver Destination address (may be zero — see dev note above).
-     * @param amount   Transfer value in wei.
-     * @param purpose  Human-readable description of the transfer.
-     */
-    function addTransaction(
-        address receiver,
-        uint256 amount,
-        string calldata purpose
-    ) external returns (uint256 id) {
+    error OnlyOwner();
+    error OnlyAuditor();
+    error OnlyRequester();
+    error InvalidExpenseId(uint256 id);
+    error InvalidStatus(Status expected, Status actual);
+    error InsufficientBalance(uint256 balance, uint256 required);
+    error EmptyReason();
+    error AlreadyFinalized(Status actual);
+
+    // ─────────────────────────────────────────────────────────────
+    // Modifiers
+    // ─────────────────────────────────────────────────────────────
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert OnlyOwner();
+        _;
+    }
+
+    modifier onlyAuditor() {
+        if (!auditors[msg.sender]) revert OnlyAuditor();
+        _;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Constructor
+    // ─────────────────────────────────────────────────────────────
+
+    constructor() {
+        owner = msg.sender;
+        auditors[msg.sender] = true;
+        largeAmountThreshold = 1_000 ether;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Governance
+    // ─────────────────────────────────────────────────────────────
+
+    function setAuditor(address auditor, bool authorized) external onlyOwner {
+        auditors[auditor] = authorized;
+        emit AuditorUpdated(auditor, authorized);
+    }
+
+    function setLargeAmountThreshold(uint256 newThreshold) external onlyOwner {
+        uint256 oldThreshold = largeAmountThreshold;
+        largeAmountThreshold = newThreshold;
+        emit LargeAmountThresholdUpdated(oldThreshold, newThreshold);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Funds management
+    // ─────────────────────────────────────────────────────────────
+
+    function depositFunds() external payable {
+        if (msg.value == 0) revert InsufficientBalance(address(this).balance, 1);
+        emit FundsDeposited(msg.sender, msg.value);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Expense workflow
+    // ─────────────────────────────────────────────────────────────
+
+    function submitExpense(address receiver, uint256 amount, string calldata purpose, string calldata category)
+        external
+        returns (uint256 id)
+    {
         bool flag = _shouldFlag(amount, purpose);
 
-        id = _transactions.length;
+        id = _expenses.length;
+        _expenses.push(
+            Expense({
+                id: id,
+                requester: msg.sender,
+                receiver: receiver,
+                amount: amount,
+                purpose: purpose,
+                category: category,
+                flagged: flag,
+                status: Status.Pending,
+                approver: address(0),
+                rejectReason: "",
+                createdAt: block.timestamp,
+                updatedAt: block.timestamp
+            })
+        );
 
-        _transactions.push(Transaction({
-            id:        id,
-            sender:    msg.sender,
-            receiver:  receiver,
-            amount:    amount,
-            purpose:   purpose,
-            flagged:   flag,
-            timestamp: block.timestamp
-        }));
+        emit ExpenseSubmitted(id, msg.sender, receiver, amount, purpose, category, flag);
+    }
 
-        emit TransactionLogged(id, msg.sender, receiver, amount, purpose, flag);
+    function approveExpense(uint256 id) external onlyAuditor {
+        Expense storage expense = _expenses[_validateExpenseId(id)];
+        if (expense.status != Status.Pending) revert InvalidStatus(Status.Pending, expense.status);
+
+        expense.status = Status.Approved;
+        expense.approver = msg.sender;
+        expense.updatedAt = block.timestamp;
+
+        emit ExpenseApproved(id, msg.sender);
+    }
+
+    function rejectExpense(uint256 id, string calldata reason) external onlyAuditor {
+        if (bytes(reason).length == 0) revert EmptyReason();
+
+        Expense storage expense = _expenses[_validateExpenseId(id)];
+        if (expense.status != Status.Pending) revert InvalidStatus(Status.Pending, expense.status);
+
+        expense.status = Status.Rejected;
+        expense.approver = msg.sender;
+        expense.rejectReason = reason;
+        expense.updatedAt = block.timestamp;
+
+        emit ExpenseRejected(id, msg.sender, reason);
+    }
+
+    function executeExpense(uint256 id) external onlyOwner {
+        Expense storage expense = _expenses[_validateExpenseId(id)];
+        if (expense.status != Status.Approved) revert InvalidStatus(Status.Approved, expense.status);
+        if (address(this).balance < expense.amount) revert InsufficientBalance(address(this).balance, expense.amount);
+
+        expense.status = Status.Executed;
+        expense.updatedAt = block.timestamp;
+
+        (bool success,) = payable(expense.receiver).call{value: expense.amount}("");
+        if (!success) revert InsufficientBalance(address(this).balance, expense.amount);
+
+        emit ExpenseExecuted(id, msg.sender, expense.amount);
+    }
+
+    function cancelExpense(uint256 id) external {
+        Expense storage expense = _expenses[_validateExpenseId(id)];
+        if (expense.requester != msg.sender) revert OnlyRequester();
+        if (expense.status != Status.Pending) revert InvalidStatus(Status.Pending, expense.status);
+
+        expense.status = Status.Cancelled;
+        expense.updatedAt = block.timestamp;
+
+        emit ExpenseCancelled(id, msg.sender);
     }
 
     // ─────────────────────────────────────────────────────────────
     // Read functions
     // ─────────────────────────────────────────────────────────────
 
-    /// @notice Returns the transaction with the given `id`.
-    /// @dev Reverts with an array-index panic if `id >= totalTransactions()`.
-    function getTransaction(uint256 id)
-        external
-        view
-        returns (Transaction memory)
-    {
-        return _transactions[id];
+    function getExpense(uint256 id) external view returns (Expense memory) {
+        return _expenses[_validateExpenseId(id)];
     }
 
-    /// @notice Returns every recorded transaction in insertion order.
-    /// @dev    Returning a dynamic struct array is fine for a demo / dashboard
-    ///         read; avoid calling this on-chain in production loops.
-    function getAllTransactions()
-        external
-        view
-        returns (Transaction[] memory)
-    {
-        return _transactions;
+    function getExpenses(uint256 start, uint256 count) external view returns (Expense[] memory expenses) {
+        uint256 total = _expenses.length;
+        if (start >= total) return new Expense[](0);
+
+        uint256 available = total - start;
+        uint256 length = count < available ? count : available;
+        expenses = new Expense[](length);
+        for (uint256 i = 0; i < length; ++i) {
+            expenses[i] = _expenses[start + i];
+        }
     }
 
-    /**
-     * @notice Returns only transactions where `flagged == true`.
-     * @dev    Builds the result array in two passes to avoid dynamic memory
-     *         resizing. Gas cost is O(n); acceptable for a demo scenario.
-     */
-    function getFlaggedTransactions()
-        external
-        view
-        returns (Transaction[] memory flagged)
-    {
-        uint256 total = _transactions.length;
-
-        // First pass: count flagged entries.
+    function getFlaggedExpenses() external view returns (Expense[] memory flagged) {
+        uint256 total = _expenses.length;
         uint256 count;
-        for (uint256 i; i < total; ++i) {
-            if (_transactions[i].flagged) ++count;
+        for (uint256 i = 0; i < total; ++i) {
+            if (_expenses[i].flagged) ++count;
         }
 
-        // Second pass: populate result array.
-        flagged = new Transaction[](count);
+        flagged = new Expense[](count);
         uint256 cursor;
-        for (uint256 i; i < total; ++i) {
-            if (_transactions[i].flagged) {
-                flagged[cursor++] = _transactions[i];
+        for (uint256 i = 0; i < total; ++i) {
+            if (_expenses[i].flagged) {
+                flagged[cursor++] = _expenses[i];
             }
         }
     }
 
-    /// @notice Returns the total number of recorded transactions.
-    function totalTransactions() external view returns (uint256) {
-        return _transactions.length;
+    function getPendingExpenses() external view returns (Expense[] memory pending) {
+        uint256 total = _expenses.length;
+        uint256 count;
+        for (uint256 i = 0; i < total; ++i) {
+            if (_expenses[i].status == Status.Pending) ++count;
+        }
+
+        pending = new Expense[](count);
+        uint256 cursor;
+        for (uint256 i = 0; i < total; ++i) {
+            if (_expenses[i].status == Status.Pending) {
+                pending[cursor++] = _expenses[i];
+            }
+        }
+    }
+
+    function totalExpenses() external view returns (uint256) {
+        return _expenses.length;
     }
 
     // ─────────────────────────────────────────────────────────────
     // Internal helpers
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * @dev Evaluates all flagging rules and returns true if any fires.
-     *      Kept separate so the logic is trivially unit-testable and readable.
-     */
-    function _shouldFlag(uint256 amount, string calldata purpose)
-        internal
-        pure
-        returns (bool)
-    {
-        if (amount == 0)                        return true;
-        if (bytes(purpose).length == 0)         return true;
-        if (amount > LARGE_AMOUNT_THRESHOLD)    return true;
+    function _shouldFlag(uint256 amount, string calldata purpose) internal view returns (bool) {
+        if (amount == 0) return true;
+        if (bytes(purpose).length == 0) return true;
+        if (amount > largeAmountThreshold) return true;
         return false;
+    }
+
+    function _validateExpenseId(uint256 id) internal view returns (uint256) {
+        if (id >= _expenses.length) revert InvalidExpenseId(id);
+        return id;
     }
 }

@@ -1,0 +1,2198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FundShield — Public Fund Transparency System</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap"
+    rel="stylesheet" />
+
+  <!-- ethers.js v6 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+
+  <!-- Framer Motion (via CDN bundle) -->
+  <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.js"></script>
+
+  <style>
+    /* ============================================
+   DESIGN TOKENS & RESET
+============================================ */
+    :root {
+      --bg-void: #030508;
+      --bg-panel: #080c14;
+      --bg-card: #0d1220;
+      --bg-card-hover: #111827;
+      --border: #1a2235;
+      --border-glow: #1e3a5f;
+
+      --cyan: #00d4ff;
+      --cyan-dim: #0090b0;
+      --green: #00ff88;
+      --green-dim: #00a855;
+      --red: #ff3d5a;
+      --red-dim: #991f31;
+      --amber: #ffb347;
+      --amber-dim: #cc7a1f;
+      --purple: #a855f7;
+
+      --text-primary: #e8edf5;
+      --text-secondary: #8899b4;
+      --text-muted: #445566;
+
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+      --font-body: 'DM Sans', sans-serif;
+
+      --radius: 8px;
+      --radius-lg: 14px;
+      --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg-void);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(0, 212, 255, 0.03) 39px, rgba(0, 212, 255, 0.03) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(0, 212, 255, 0.03) 39px, rgba(0, 212, 255, 0.03) 40px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ============================================
+   SCROLLBAR
+============================================ */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-void);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-glow);
+      border-radius: 2px;
+    }
+
+    /* ============================================
+   LAYOUT
+============================================ */
+    #app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ============================================
+   TOP NAV
+============================================ */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 64px;
+      background: rgba(8, 12, 20, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .nav-title {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-subtitle {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Network badge */
+    .net-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .net-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background var(--transition);
+    }
+
+    .net-dot.connected {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse-green 2s infinite;
+    }
+
+    .net-dot.sepolia {
+      background: var(--purple);
+      box-shadow: 0 0 8px var(--purple);
+    }
+
+    .net-dot.anvil {
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+    }
+
+    @keyframes pulse-green {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    /* Role badge */
+    .role-badge {
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid;
+      transition: all var(--transition);
+    }
+
+    .role-badge.admin {
+      color: var(--cyan);
+      border-color: var(--cyan);
+      background: rgba(0, 212, 255, 0.08);
+    }
+
+    .role-badge.auditor {
+      color: var(--amber);
+      border-color: var(--amber);
+      background: rgba(255, 179, 71, 0.08);
+    }
+
+    .role-badge.public {
+      color: var(--text-secondary);
+      border-color: var(--border);
+      background: var(--bg-card);
+    }
+
+    /* Connect button */
+    #connectBtn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, var(--cyan), #0066ff);
+      border: none;
+      border-radius: var(--radius);
+      color: #fff;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    #connectBtn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.35);
+    }
+
+    #connectBtn:active {
+      transform: translateY(0);
+    }
+
+    #connectBtn.connected {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    /* Role switcher */
+    .role-switcher {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px;
+    }
+
+    .role-btn {
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .role-btn.active {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+    }
+
+    /* ============================================
+   MAIN CONTENT
+============================================ */
+    main {
+      flex: 1;
+      padding: 28px 32px;
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* ============================================
+   HERO / PAGE HEADER
+============================================ */
+    .page-header {
+      margin-bottom: 28px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeSlideUp 0.6s 0.1s forwards;
+    }
+
+    @keyframes fadeSlideUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .page-header h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .page-header h1 span {
+      background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .page-header p {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    /* ============================================
+   STATS GRID
+============================================ */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 22px;
+      position: relative;
+      overflow: hidden;
+      cursor: default;
+      opacity: 0;
+      transform: translateY(24px);
+      transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+    }
+
+    .stat-card.visible {
+      animation: fadeSlideUp 0.5s forwards;
+    }
+
+    .stat-card:hover {
+      border-color: var(--border-glow);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent, var(--cyan));
+      opacity: 0.7;
+    }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 36px;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: var(--accent, var(--cyan));
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .stat-icon {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      font-size: 22px;
+      opacity: 0.12;
+    }
+
+    /* ============================================
+   MAIN GRID
+============================================ */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 1100px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ============================================
+   PANEL / CARD
+============================================ */
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeSlideUp 0.5s 0.35s forwards;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      background: rgba(0, 212, 255, 0.1);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* ============================================
+   BUTTONS
+============================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), #0066ff);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0, 212, 255, 0.3);
+    }
+
+    .btn-ghost {
+      background: var(--bg-card-hover);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      color: var(--text-primary);
+      border-color: var(--border-glow);
+    }
+
+    .btn-danger {
+      background: rgba(255, 61, 90, 0.1);
+      color: var(--red);
+      border: 1px solid rgba(255, 61, 90, 0.25);
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 61, 90, 0.2);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* ============================================
+   TRANSACTION TABLE
+============================================ */
+    .tx-table-wrap {
+      overflow-x: auto;
+    }
+
+    .tx-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .tx-table thead th {
+      padding: 10px 16px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tx-row {
+      border-bottom: 1px solid rgba(26, 34, 53, 0.5);
+      transition: background var(--transition);
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+
+    .tx-row.visible {
+      animation: rowSlideIn 0.3s forwards;
+    }
+
+    @keyframes rowSlideIn {
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .tx-row:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tx-row.flagged {
+      background: rgba(255, 61, 90, 0.04);
+      animation: flaggedPulse 3s ease-in-out infinite, rowSlideIn 0.3s forwards;
+    }
+
+    @keyframes flaggedPulse {
+
+      0%,
+      100% {
+        box-shadow: inset 0 0 0 1px rgba(255, 61, 90, 0);
+      }
+
+      50% {
+        box-shadow: inset 0 0 0 1px rgba(255, 61, 90, 0.3);
+      }
+    }
+
+    .tx-row td {
+      padding: 12px 16px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+
+    .tx-addr {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--cyan);
+    }
+
+    .tx-amount {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .tx-amount.zero {
+      color: var(--red);
+    }
+
+    .tx-amount.high {
+      color: var(--amber);
+    }
+
+    .tx-amount.normal {
+      color: var(--green);
+    }
+
+    .tx-purpose {
+      color: var(--text-secondary);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tx-purpose.empty {
+      color: var(--red);
+      font-style: italic;
+    }
+
+    .tx-id {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Flag badge */
+    .flag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .flag-badge.flagged {
+      background: rgba(255, 61, 90, 0.12);
+      color: var(--red);
+      border: 1px solid rgba(255, 61, 90, 0.3);
+      animation: flagBadgePulse 2s ease-in-out infinite;
+    }
+
+    .flag-badge.clean {
+      background: rgba(0, 255, 136, 0.08);
+      color: var(--green);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+    }
+
+    @keyframes flagBadgePulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 61, 90, 0);
+      }
+
+      50% {
+        box-shadow: 0 0 8px 1px rgba(255, 61, 90, 0.25);
+      }
+    }
+
+    /* Empty state */
+    .empty-state {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      opacity: 0.3;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+    }
+
+    /* ============================================
+   SIDEBAR PANELS
+============================================ */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ============================================
+   ADD TRANSACTION FORM
+============================================ */
+    .form-panel {
+      opacity: 0;
+      animation: fadeSlideUp 0.5s 0.45s forwards;
+    }
+
+    .form-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 10px 12px;
+      width: 100%;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+      resize: none;
+    }
+
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
+    }
+
+    .form-input::placeholder,
+    .form-textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-select {
+      appearance: none;
+      cursor: pointer;
+    }
+
+    .form-select option {
+      background: var(--bg-panel);
+    }
+
+    .form-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ============================================
+   ANALYTICS PANEL
+============================================ */
+    .analytics-body {
+      padding: 20px;
+    }
+
+    .analytic-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(26, 34, 53, 0.5);
+    }
+
+    .analytic-row:last-child {
+      border-bottom: none;
+    }
+
+    .analytic-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .analytic-value {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-top: 16px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .progress-track {
+      height: 6px;
+      background: var(--bg-panel);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--green), var(--cyan));
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 0%;
+    }
+
+    .progress-fill.danger {
+      background: linear-gradient(90deg, var(--amber), var(--red));
+    }
+
+    /* ============================================
+   FLAGGED SECTION PANEL
+============================================ */
+    .flagged-list {
+      padding: 0 20px 16px;
+    }
+
+    .flagged-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(26, 34, 53, 0.5);
+      opacity: 0;
+      animation: rowSlideIn 0.3s forwards;
+    }
+
+    .flagged-item:last-child {
+      border-bottom: none;
+    }
+
+    .flagged-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(255, 61, 90, 0.1);
+      border: 1px solid rgba(255, 61, 90, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      animation: flagBadgePulse 2s ease-in-out infinite;
+    }
+
+    .flagged-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .flagged-addr {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--cyan);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .flagged-reason {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 2px;
+    }
+
+    .flagged-amount {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--red);
+      flex-shrink: 0;
+    }
+
+    /* ============================================
+   MODAL
+============================================ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 5, 8, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      max-width: 420px;
+      width: 90%;
+      transform: scale(0.9) translateY(20px);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(0, 212, 255, 0.05);
+    }
+
+    .modal-overlay.open .modal {
+      transform: scale(1) translateY(0);
+    }
+
+    .modal-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(168, 85, 247, 0.15));
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 18px;
+    }
+
+    .modal h2 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+
+    .modal p {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    .modal-detail {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.8;
+    }
+
+    .modal-detail span {
+      color: var(--cyan);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .modal-actions .btn {
+      flex: 1;
+      justify-content: center;
+    }
+
+    /* Status states in modal */
+    .modal.success .modal-icon {
+      background: rgba(0, 255, 136, 0.1);
+      border-color: rgba(0, 255, 136, 0.2);
+    }
+
+    .modal.error .modal-icon {
+      background: rgba(255, 61, 90, 0.1);
+      border-color: rgba(255, 61, 90, 0.2);
+    }
+
+    /* ============================================
+   TOAST
+============================================ */
+    #toastContainer {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      font-size: 12px;
+      min-width: 260px;
+      animation: toastIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateX(60px) scale(0.9);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+      }
+    }
+
+    .toast.success {
+      border-color: rgba(0, 255, 136, 0.3);
+    }
+
+    .toast.error {
+      border-color: rgba(255, 61, 90, 0.3);
+    }
+
+    .toast.info {
+      border-color: rgba(0, 212, 255, 0.3);
+    }
+
+    .toast-icon {
+      font-size: 16px;
+    }
+
+    .toast-msg {
+      flex: 1;
+      color: var(--text-primary);
+    }
+
+    /* ============================================
+   ACCESS DENIED / CONNECT PROMPT
+============================================ */
+    .connect-prompt {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      gap: 20px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeSlideUp 0.7s 0.2s forwards;
+    }
+
+    .connect-prompt-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(168, 85, 247, 0.1));
+      border: 1px solid var(--border-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+
+    .connect-prompt h2 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .connect-prompt p {
+      color: var(--text-secondary);
+      max-width: 380px;
+      font-size: 14px;
+    }
+
+    /* ============================================
+   STATUS BAR
+============================================ */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 20px;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-green 2s infinite;
+    }
+
+    /* ============================================
+   LOADING SPINNER
+============================================ */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(0, 212, 255, 0.2);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ============================================
+   SECTION SEPARATOR
+============================================ */
+    .section-sep {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 4px 0;
+    }
+
+    /* ============================================
+   FRAUD ALERT BANNER
+============================================ */
+    .fraud-alert {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      background: rgba(255, 61, 90, 0.07);
+      border: 1px solid rgba(255, 61, 90, 0.25);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      animation: fadeSlideUp 0.4s forwards;
+    }
+
+    .fraud-alert.show {
+      display: flex;
+    }
+
+    .fraud-alert-icon {
+      font-size: 20px;
+      animation: flagBadgePulse 1.5s infinite;
+    }
+
+    .fraud-alert-text {
+      flex: 1;
+    }
+
+    .fraud-alert-text strong {
+      font-family: var(--font-display);
+      font-size: 13px;
+      color: var(--red);
+      display: block;
+    }
+
+    .fraud-alert-text span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ============================================
+   HIDDEN UTILITY
+============================================ */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="app">
+
+    <!-- ============================
+       TOP NAV
+  ============================= -->
+    <nav>
+      <div class="nav-brand">
+        <div class="nav-logo">🛡️</div>
+        <div>
+          <div class="nav-title">FundShield</div>
+          <div class="nav-subtitle">Public Fund Transparency Protocol</div>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <!-- Role Switcher (demo only — real roles via wallet addr) -->
+        <div class="role-switcher" title="Demo role override">
+          <button class="role-btn active" data-role="admin" onclick="switchRole('admin')">Admin</button>
+          <button class="role-btn" data-role="auditor" onclick="switchRole('auditor')">Auditor</button>
+          <button class="role-btn" data-role="public" onclick="switchRole('public')">Public</button>
+        </div>
+
+        <!-- Role Badge -->
+        <div class="role-badge public" id="roleBadge">PUBLIC</div>
+
+        <!-- Network Badge -->
+        <div class="net-badge">
+          <div class="net-dot" id="netDot"></div>
+          <span id="netLabel">Not Connected</span>
+        </div>
+
+        <!-- Connect Button -->
+        <button id="connectBtn" onclick="connectWallet()">
+          <span>🦊</span> Connect Wallet
+        </button>
+      </div>
+    </nav>
+
+    <!-- ============================
+       MAIN
+  ============================= -->
+    <main id="mainContent">
+
+      <!-- Wallet NOT connected → show prompt -->
+      <div id="connectPrompt" class="connect-prompt">
+        <div class="connect-prompt-icon">🛡️</div>
+        <h2>FundShield Dashboard</h2>
+        <p>Connect your MetaMask wallet to access the public fund transparency ledger. All roles welcome — Admin,
+          Auditor, or Public.</p>
+        <button class="btn btn-primary" style="padding:12px 28px;font-size:14px;" onclick="connectWallet()">
+          🦊 Connect MetaMask
+        </button>
+        <p style="font-size:11px;color:var(--text-muted);">Works on Sepolia testnet & Anvil local node</p>
+      </div>
+
+      <!-- Wallet connected → Dashboard -->
+      <div id="dashboard" class="hidden">
+
+        <!-- Page header -->
+        <div class="page-header">
+          <h1>Fund <span>Transparency</span> Ledger</h1>
+          <p>Real-time on-chain auditing · Fraud detection · Tamper-proof records</p>
+        </div>
+
+        <!-- Fraud Alert Banner -->
+        <div class="fraud-alert" id="fraudAlert">
+          <div class="fraud-alert-icon">🚨</div>
+          <div class="fraud-alert-text">
+            <strong>Suspicious Transactions Detected</strong>
+            <span id="fraudAlertText">Multiple flagged entries require auditor review.</span>
+          </div>
+          <button class="btn btn-danger" onclick="scrollToFlagged()">View Flagged →</button>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card" style="--accent:var(--cyan)">
+            <div class="stat-label">Total Transactions</div>
+            <div class="stat-value" id="statTotal">—</div>
+            <div class="stat-sub">on-chain records</div>
+            <div class="stat-icon">📊</div>
+          </div>
+          <div class="stat-card" style="--accent:var(--red)">
+            <div class="stat-label">Flagged Transactions</div>
+            <div class="stat-value" id="statFlagged">—</div>
+            <div class="stat-sub">suspicious entries</div>
+            <div class="stat-icon">🚩</div>
+          </div>
+          <div class="stat-card" style="--accent:var(--amber)">
+            <div class="stat-label">Flag Ratio</div>
+            <div class="stat-value" id="statRatio">—</div>
+            <div class="stat-sub">of all transactions</div>
+            <div class="stat-icon">⚠️</div>
+          </div>
+          <div class="stat-card" style="--accent:var(--green)">
+            <div class="stat-label">Total Volume</div>
+            <div class="stat-value" id="statVolume">—</div>
+            <div class="stat-sub">ETH tracked</div>
+            <div class="stat-icon">💎</div>
+          </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+
+          <!-- Left: Transaction Table + Flagged -->
+          <div style="display:flex;flex-direction:column;gap:20px;">
+
+            <!-- All Expenses -->
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  📋 Expense Ledger
+                  <div class="panel-badge" id="txCountBadge">0 records</div>
+                </div>
+                <div class="panel-actions">
+                  <button class="btn btn-ghost" onclick="fetchData()">
+                    ↻ Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div class="tx-table-wrap">
+                <table class="tx-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>REQUESTER</th>
+                      <th>RECEIVER</th>
+                      <th>AMOUNT (ETH)</th>
+                      <th>PURPOSE</th>
+                      <th>CATEGORY</th>
+                      <th>STATUS</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="txTableBody">
+                    <tr>
+                      <td colspan="8">
+                        <div class="empty-state">
+                          <div class="icon">📭</div>
+                          <p>No expenses loaded yet.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Flagged Transactions (Auditor / Admin) -->
+            <div class="panel" id="flaggedPanel">
+              <div class="panel-header">
+                <div class="panel-title" style="color:var(--red)">
+                  🚩 Flagged Transactions
+                  <div class="panel-badge" id="flaggedCountBadge"
+                    style="background:rgba(255,61,90,0.1);color:var(--red);border-color:rgba(255,61,90,0.25);">0 flagged
+                  </div>
+                </div>
+              </div>
+              <div class="flagged-list" id="flaggedList">
+                <div class="empty-state">
+                  <div class="icon">✅</div>
+                  <p>No flagged transactions detected.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right: Sidebar -->
+          <div class="sidebar">
+
+            <!-- Submit Expense Request -->
+            <div class="panel form-panel" id="addTxPanel">
+              <div class="panel-header">
+                <div class="panel-title">➕ Submit Expense</div>
+              </div>
+              <div class="form-body">
+                <div class="form-group">
+                  <label class="form-label">Recipient Address</label>
+                  <input type="text" class="form-input" id="inpAddr" placeholder="0x..." />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Amount (in Wei)</label>
+                  <input type="number" class="form-input" id="inpAmount" placeholder="e.g. 1000000000000000000"
+                    min="0" />
+                  <div class="form-hint" id="amtHint">≈ 0 ETH · Normal range</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Purpose / Description</label>
+                  <textarea class="form-textarea" id="inpPurpose" rows="3"
+                    placeholder="e.g. Infrastructure Grant Q2 2025"></textarea>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Category</label>
+                  <select class="form-select" id="inpCategory">
+                    <option value="">— Select Category —</option>
+                    <option value="operations">Operations</option>
+                    <option value="funding">Funding</option>
+                    <option value="events">Events</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="infrastructure">Infrastructure</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="openSubmitModal()">
+                  🔐 Submit Expense
+                </button>
+                <div id="addTxStatus" style="font-size:11px;color:var(--text-muted);text-align:center;"></div>
+              </div>
+            </div>
+
+            <!-- Analytics (Auditor / Admin) -->
+            <div class="panel" id="analyticsPanel" style="animation-delay:0.55s;">
+              <div class="panel-header">
+                <div class="panel-title">📈 Analytics</div>
+              </div>
+              <div class="analytics-body">
+                <div class="analytic-row">
+                  <span class="analytic-label">Clean transactions</span>
+                  <span class="analytic-value" id="aClean" style="color:var(--green)">—</span>
+                </div>
+                <div class="analytic-row">
+                  <span class="analytic-label">Zero-amount flags</span>
+                  <span class="analytic-value" id="aZero" style="color:var(--red)">—</span>
+                </div>
+                <div class="analytic-row">
+                  <span class="analytic-label">High-value alerts</span>
+                  <span class="analytic-value" id="aHigh" style="color:var(--amber)">—</span>
+                </div>
+                <div class="analytic-row">
+                  <span class="analytic-label">Empty purpose flags</span>
+                  <span class="analytic-value" id="aEmpty" style="color:var(--red)">—</span>
+                </div>
+
+                <div class="section-sep" style="margin:14px 0;"></div>
+
+                <div class="progress-wrap">
+                  <div class="progress-label">
+                    <span>Clean Rate</span>
+                    <span id="cleanRateLabel">0%</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill" id="cleanRateBar"></div>
+                  </div>
+                </div>
+
+                <div class="progress-wrap" style="margin-top:10px;">
+                  <div class="progress-label">
+                    <span>Risk Index</span>
+                    <span id="riskLabel">Low</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill danger" id="riskBar"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contract Info -->
+            <div class="panel" style="animation:fadeSlideUp 0.5s 0.65s forwards;opacity:0;">
+              <div class="panel-header">
+                <div class="panel-title">⛓️ Contract Info</div>
+              </div>
+              <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+                <div>
+                  <div class="form-label" style="margin-bottom:3px;">Contract Address</div>
+                  <div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);word-break:break-all;"
+                    id="contractAddrDisplay">—</div>
+                </div>
+                <div>
+                  <div class="form-label" style="margin-bottom:3px;">Network</div>
+                  <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);"
+                    id="networkDisplay">—</div>
+                </div>
+                <div>
+                  <div class="form-label" style="margin-bottom:3px;">Your Address</div>
+                  <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);"
+                    id="walletDisplay">—</div>
+                </div>
+                <div>
+                  <div class="form-label" style="margin-bottom:3px;">Your Role</div>
+                  <div style="font-family:var(--font-mono);font-size:11px;" id="roleDisplay">—</div>
+                </div>
+                <button class="btn btn-ghost" style="margin-top:4px;font-size:10px;justify-content:center;"
+                  onclick="openEtherscan()">↗ View on Explorer</button>
+              </div>
+            </div>
+
+          </div><!-- /sidebar -->
+        </div><!-- /main-grid -->
+      </div><!-- /dashboard -->
+    </main>
+
+    <!-- Status Bar -->
+    <div class="status-bar" id="statusBar">
+      <div class="status-item">
+        <div class="status-dot"></div> FundShield v1.0
+      </div>
+      <div class="status-item">· Hackathon Build 2025</div>
+      <div class="status-item" id="statusContract">· Contract: Not loaded</div>
+      <div class="status-item" id="statusBlock">· Block: —</div>
+    </div>
+  </div>
+
+  <!-- ============================
+     SUBMIT MODAL
+============================= -->
+  <div class="modal-overlay" id="submitModal">
+    <div class="modal">
+      <div class="modal-icon" id="modalIcon">🔐</div>
+      <h2 id="modalTitle">Confirm Transaction</h2>
+      <p id="modalDesc">Review details before signing with MetaMask.</p>
+      <div class="modal-detail" id="modalDetail"></div>
+      <div class="modal-actions" id="modalActions">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="confirmBtn" onclick="submitTransaction()">Sign & Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- ============================
+     JAVASCRIPT
+============================= -->
+  <script>
+    'use strict';
+
+    /* =====================================================
+       CONFIG — Update these for your deployment
+    ===================================================== */
+    const CONTRACTS = {
+      // Anvil local
+      31337: {
+        address: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+        name: 'Anvil Local'
+      },
+      // Sepolia testnet
+      11155111: {
+        address: '0xYOUR_SEPOLIA_CONTRACT_ADDRESS_HERE',
+        name: 'Sepolia Testnet'
+      }
+    };
+
+    // FundShield Expense Workflow ABI
+    const ABI = [
+      {"inputs":[],"name":"depositFunds","outputs":[],"stateMutability":"payable","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"approveExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"string","name":"reason","type":"string"}],"name":"rejectExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"executeExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"cancelExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"}],"name":"submitExpense","outputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"getExpense","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"getFlaggedExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"flagged","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"getPendingExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"pending","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"totalExpenses","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"auditors","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"largeAmountThreshold","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+    ];
+
+    /* =====================================================
+       STATE
+    ===================================================== */
+    let provider = null;
+    let signer = null;
+    let contract = null;
+    let walletAddr = null;
+    let chainId = null;
+    let currentRole = 'public';
+    let allTxns = [];
+    let flaggedTxns = [];
+
+    /* =====================================================
+       STAGGER ANIMATIONS — stat cards
+    ===================================================== */
+    function animateStatCards() {
+      document.querySelectorAll('.stat-card').forEach((card, i) => {
+        card.style.animationDelay = `${0.1 + i * 0.08}s`;
+        card.classList.add('visible');
+      });
+    }
+
+    /* =====================================================
+       WALLET CONNECTION
+    ===================================================== */
+    async function connectWallet() {
+      if (!window.ethereum) {
+        showToast('error', '🦊 MetaMask not found. Please install it.');
+        return;
+      }
+      try {
+        showToast('info', '🦊 Requesting wallet access…');
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        walletAddr = accounts[0];
+
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+
+        const network = await provider.getNetwork();
+        chainId = Number(network.chainId);
+
+        setupContract();
+        updateNavWallet();
+        showDashboard();
+        fetchData();
+        startBlockListener();
+
+        window.ethereum.on('accountsChanged', (accs) => {
+          walletAddr = accs[0] || null;
+          if (!walletAddr) { disconnectUI(); return; }
+          updateNavWallet();
+          fetchData();
+        });
+        window.ethereum.on('chainChanged', () => window.location.reload());
+
+      } catch (err) {
+        console.error(err);
+        showToast('error', '❌ Connection rejected: ' + (err.message || err));
+      }
+    }
+
+    function setupContract() {
+      const cfg = CONTRACTS[chainId];
+      if (!cfg) {
+        showToast('error', `⚠️ Unsupported network (chainId ${chainId}). Add Sepolia or Anvil.`);
+        contract = null;
+        return;
+      }
+      contract = new ethers.Contract(cfg.address, ABI, signer);
+      document.getElementById('contractAddrDisplay').textContent = cfg.address;
+      document.getElementById('networkDisplay').textContent = cfg.name + ' (chainId: ' + chainId + ')';
+      document.getElementById('statusContract').textContent = '· Contract: ' + cfg.address.slice(0, 10) + '…';
+    }
+
+    function updateNavWallet() {
+      const btn = document.getElementById('connectBtn');
+      const netDot = document.getElementById('netDot');
+      const netLabel = document.getElementById('netLabel');
+
+      if (walletAddr) {
+        btn.textContent = walletAddr.slice(0, 6) + '…' + walletAddr.slice(-4);
+        btn.classList.add('connected');
+
+        const cfg = CONTRACTS[chainId];
+        if (cfg) {
+          const isAnvil = chainId === 31337;
+          const isSepolia = chainId === 11155111;
+          netDot.className = 'net-dot connected' + (isSepolia ? ' sepolia' : isAnvil ? ' anvil' : '');
+          netLabel.textContent = cfg.name;
+        } else {
+          netDot.className = 'net-dot';
+          netLabel.textContent = 'Unknown Network';
+        }
+
+        document.getElementById('walletDisplay').textContent = walletAddr;
+      }
+    }
+
+    function showDashboard() {
+      document.getElementById('connectPrompt').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      animateStatCards();
+      applyRoleUI(currentRole);
+    }
+
+    function disconnectUI() {
+      document.getElementById('connectPrompt').classList.remove('hidden');
+      document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('connectBtn').textContent = '🦊 Connect Wallet';
+      document.getElementById('connectBtn').classList.remove('connected');
+    }
+
+    /* =====================================================
+       ROLE SYSTEM
+    ===================================================== */
+    function switchRole(role) {
+      currentRole = role;
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === role));
+      const badge = document.getElementById('roleBadge');
+      badge.className = 'role-badge ' + role;
+      badge.textContent = role.toUpperCase();
+      document.getElementById('roleDisplay').textContent = role.toUpperCase();
+      applyRoleUI(role);
+      showToast('info', `🔄 Switched to ${role.charAt(0).toUpperCase() + role.slice(1)} view`);
+    }
+
+    function applyRoleUI(role) {
+      // Submit Expense panel — everyone can submit
+      const addPanel = document.getElementById('addTxPanel');
+      if (addPanel) addPanel.classList.toggle('hidden', false);
+
+      // Flagged + analytics — admin & auditor only
+      const flaggedPanel = document.getElementById('flaggedPanel');
+      const analyticsPanel = document.getElementById('analyticsPanel');
+      const showFull = role === 'admin' || role === 'auditor';
+      if (flaggedPanel) flaggedPanel.classList.toggle('hidden', !showFull);
+      if (analyticsPanel) analyticsPanel.classList.toggle('hidden', !showFull);
+    }
+
+    /* =====================================================
+       DATA FETCHING
+    ===================================================== */
+    async function fetchData() {
+      if (!contract) { showToast('error', '⚠️ Contract not connected.'); return; }
+
+      try {
+        const [total, flagged, pending] = await Promise.all([
+          contract.totalExpenses(),
+          contract.getFlaggedExpenses(),
+          contract.getPendingExpenses()
+        ]);
+
+        // Build allTxns by fetching each expense individually
+        allTxns = [];
+        for (let i = 0; i < Number(total); i++) {
+          try {
+            const exp = await contract.getExpense(i);
+            allTxns.push(exp);
+          } catch (e) {
+            console.warn(`Could not fetch expense ${i}:`, e);
+          }
+        }
+
+        flaggedTxns = flagged;
+
+        renderStats();
+        renderTxTable();
+        renderFlagged();
+        renderAnalytics();
+        showToast('success', `✅ Loaded ${allTxns.length} expense(s) from chain`);
+      } catch (err) {
+        console.error(err);
+        showToast('error', '❌ Fetch failed: ' + (err.message || err));
+      }
+    }
+
+    /* =====================================================
+       RENDER STATS
+    ===================================================== */
+    const HIGH_THRESHOLD = ethers.parseEther('10'); // 10 ETH
+
+    function renderStats() {
+      const total = allTxns.length;
+      const flagged = flaggedTxns.length;
+      const ratio = total > 0 ? ((flagged / total) * 100).toFixed(1) : '0.0';
+      let volume = 0n;
+      allTxns.forEach(t => { volume += t.amount; });
+
+      animateCounter('statTotal', 0, total, 0);
+      animateCounter('statFlagged', 0, flagged, 0);
+
+      document.getElementById('statRatio').textContent = ratio + '%';
+      document.getElementById('statVolume').textContent = parseFloat(ethers.formatEther(volume)).toFixed(3) + 'Ξ';
+
+      document.getElementById('txCountBadge').textContent = total + ' records';
+      document.getElementById('flaggedCountBadge').textContent = flagged + ' flagged';
+
+      // Fraud alert banner
+      const alert = document.getElementById('fraudAlert');
+      if (flagged > 0) {
+        alert.classList.add('show');
+        document.getElementById('fraudAlertText').textContent =
+          `${flagged} suspicious transaction${flagged > 1 ? 's' : ''} detected — review required.`;
+      } else {
+        alert.classList.remove('show');
+      }
+    }
+
+    function animateCounter(id, from, to, decimals) {
+      const el = document.getElementById(id);
+      const dur = 800;
+      const start = performance.now();
+      function step(now) {
+        const p = Math.min((now - start) / dur, 1);
+        const ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = (from + (to - from) * ease).toFixed(decimals);
+        if (p < 1) requestAnimationFrame(step);
+        else el.textContent = to.toFixed(decimals);
+      }
+      requestAnimationFrame(step);
+    }
+
+    /* =====================================================
+       RENDER EXPENSE TABLE
+    ===================================================== */
+    function renderTxTable() {
+      const tbody = document.getElementById('txTableBody');
+
+      if (allTxns.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📭</div><p>No expenses on-chain yet.</p></div></td></tr>`;
+        return;
+      }
+
+      const STATUS_ENUM = { 0: 'Pending', 1: 'Approved', 2: 'Executed', 3: 'Rejected', 4: 'Cancelled' };
+
+      tbody.innerHTML = allTxns.map((exp, i) => {
+        const amtEth = parseFloat(ethers.formatEther(exp.amount));
+        const isZero = exp.amount === 0n;
+        const isHigh = exp.amount > HIGH_THRESHOLD;
+        const isEmpty = !exp.purpose || exp.purpose.trim() === '';
+
+        const amtClass = isZero ? 'zero' : isHigh ? 'high' : 'normal';
+        const amtLabel = isZero ? '0 (ZERO!)' : amtEth.toFixed(6) + ' ETH';
+
+        const shortReq = exp.requester.slice(0, 6) + '…' + exp.requester.slice(-4);
+        const shortRec = exp.receiver.slice(0, 6) + '…' + exp.receiver.slice(-4);
+        const statusLabel = STATUS_ENUM[Number(exp.status)] || 'Unknown';
+        const statusColor = exp.status == 1 ? 'var(--green)' : exp.status == 2 ? 'var(--cyan)' : exp.status == 3 || exp.status == 4 ? 'var(--red)' : 'var(--amber)';
+
+        let actionsHtml = '';
+        if (exp.status == 0) { // Pending
+          actionsHtml = `
+            <button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="approveExpense(${exp.id})">✓ Approve</button>
+            <button class="btn btn-danger" style="font-size:9px;padding:4px 8px;" onclick="rejectExpense(${exp.id})">✗ Reject</button>
+          `;
+        } else if (exp.status == 1) { // Approved
+          actionsHtml = `<button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="executeExpense(${exp.id})">▶ Execute</button>`;
+        }
+
+        return `
+      <tr class="tx-row ${exp.flagged ? 'flagged' : ''}" data-idx="${i}">
+        <td class="tx-id">#${exp.id}</td>
+        <td class="tx-addr" title="${exp.requester}">${shortReq}</td>
+        <td class="tx-addr" title="${exp.receiver}">${shortRec}</td>
+        <td class="tx-amount ${amtClass}">${amtLabel}</td>
+        <td class="tx-purpose" title="${exp.purpose || '(empty)'}">${exp.purpose || '⚠ No purpose'}</td>
+        <td>${exp.category || 'N/A'}</td>
+        <td style="color:${statusColor};font-family:var(--font-mono);font-size:11px;font-weight:700;">${statusLabel}</td>
+        <td>${actionsHtml}</td>
+      </tr>`;
+      }).join('');
+
+      // Stagger animate rows
+      document.querySelectorAll('.tx-row').forEach((row, i) => {
+        row.style.animationDelay = `${i * 0.04}s`;
+        setTimeout(() => row.classList.add('visible'), i * 40);
+      });
+    }
+
+    /* =====================================================
+       RENDER FLAGGED PANEL
+    ===================================================== */
+    function renderFlagged() {
+      const list = document.getElementById('flaggedList');
+
+      if (flaggedTxns.length === 0) {
+        list.innerHTML = `<div class="empty-state"><div class="icon">✅</div><p>No flagged expenses detected.</p></div>`;
+        return;
+      }
+
+      list.innerHTML = flaggedTxns.map((exp, i) => {
+        const amtEth = parseFloat(ethers.formatEther(exp.amount));
+        const isZero = exp.amount === 0n;
+        const isHigh = exp.amount > HIGH_THRESHOLD;
+        const isEmpty = !exp.purpose || exp.purpose.trim() === '';
+
+        let reasons = [];
+        if (isZero) reasons.push('Zero amount');
+        if (isHigh) reasons.push('High-value (>' + parseFloat(ethers.formatEther(HIGH_THRESHOLD)) + ' ETH)');
+        if (isEmpty) reasons.push('Missing purpose');
+
+        const shortAddr = exp.receiver.slice(0, 8) + '…' + exp.receiver.slice(-6);
+
+        return `
+      <div class="flagged-item" style="animation-delay:${i * 0.05}s">
+        <div class="flagged-icon">🚩</div>
+        <div class="flagged-info">
+          <div class="flagged-addr">${shortAddr}</div>
+          <div class="flagged-reason">${reasons.join(' · ')}</div>
+        </div>
+        <div class="flagged-amount">${isZero ? '0' : amtEth.toFixed(4)} ETH</div>
+      </div>`;
+      }).join('');
+    }
+
+    /* =====================================================
+       RENDER ANALYTICS
+    ===================================================== */
+    function renderAnalytics() {
+      const total = allTxns.length;
+      const flagged = flaggedTxns.length;
+      const clean = total - flagged;
+
+      let zeroCount = 0;
+      let highCount = 0;
+      let emptyCount = 0;
+
+      allTxns.forEach(exp => {
+        if (exp.amount === 0n) zeroCount++;
+        if (exp.amount > HIGH_THRESHOLD) highCount++;
+        if (!exp.purpose || exp.purpose.trim() === '') emptyCount++;
+      });
+
+      document.getElementById('aClean').textContent = clean;
+      document.getElementById('aZero').textContent = zeroCount;
+      document.getElementById('aHigh').textContent = highCount;
+      document.getElementById('aEmpty').textContent = emptyCount;
+
+      const cleanRate = total > 0 ? ((clean / total) * 100) : 100;
+      const riskRate = total > 0 ? ((flagged / total) * 100) : 0;
+
+      document.getElementById('cleanRateLabel').textContent = cleanRate.toFixed(0) + '%';
+      document.getElementById('riskLabel').textContent = riskRate > 50 ? 'HIGH' : riskRate > 20 ? 'MEDIUM' : 'LOW';
+
+      setTimeout(() => {
+        document.getElementById('cleanRateBar').style.width = cleanRate + '%';
+        document.getElementById('riskBar').style.width = riskRate + '%';
+      }, 300);
+    }
+
+    /* =====================================================
+       SUBMIT MODAL
+    ===================================================== */
+    function openSubmitModal() {
+      if (currentRole !== 'admin') {
+        showToast('error', '🔒 Admin role required to add transactions.');
+        return;
+      }
+      if (!contract) { showToast('error', '⚠️ Not connected to contract.'); return; }
+
+      const addr = document.getElementById('inpAddr').value.trim();
+      const amtWei = document.getElementById('inpAmount').value.trim();
+      const purpose = document.getElementById('inpPurpose').value.trim();
+
+      if (!addr || !amtWei) {
+        showToast('error', '⚠️ Recipient and amount are required.');
+        return;
+      }
+      if (!ethers.isAddress(addr)) {
+        showToast('error', '❌ Invalid Ethereum address.');
+        return;
+      }
+
+      const amtBig = BigInt(amtWei);
+      const amtEth = parseFloat(ethers.formatEther(amtBig)).toFixed(6);
+
+      const isZero = amtBig === 0n;
+      const isHigh = amtBig > HIGH_THRESHOLD;
+      const isEmpty = !purpose;
+
+      let warnings = '';
+      if (isZero) warnings += '\n⚠️ Zero amount will be FLAGGED as suspicious';
+      if (isHigh) warnings += '\n⚠️ High-value amount will be FLAGGED for review';
+      if (isEmpty) warnings += '\n⚠️ No purpose = automatic fraud flag';
+
+      document.getElementById('modalDetail').innerHTML = `
+    <span>Recipient:</span> ${addr}<br>
+    <span>Amount:</span> ${amtEth} ETH (${amtWei} Wei)<br>
+    <span>Purpose:</span> ${purpose || '(empty)'}<br>
+    ${warnings ? `<br><span style="color:var(--amber)">${warnings.trim()}</span>` : '<br><span style="color:var(--green)">✅ Transaction appears clean</span>'}
+  `;
+
+      document.getElementById('modalTitle').textContent = 'Confirm Transaction';
+      document.getElementById('modalDesc').textContent = 'Review before signing with MetaMask.';
+      document.getElementById('modalIcon').textContent = '🔐';
+      document.getElementById('modalActions').innerHTML = `
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" id="confirmBtn" onclick="submitTransaction()">Sign & Submit</button>
+  `;
+
+      document.getElementById('submitModal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('submitModal').classList.remove('open');
+    }
+
+    async function submitTransaction() {
+      const addr = document.getElementById('inpAddr').value.trim();
+      const amtWei = document.getElementById('inpAmount').value.trim();
+      const purpose = document.getElementById('inpPurpose').value.trim();
+      const btn = document.getElementById('confirmBtn');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Submitting…';
+
+      try {
+        const tx = await contract.addTransaction(addr, BigInt(amtWei), purpose);
+        showToast('info', '⏳ Transaction submitted. Waiting for confirmation…');
+
+        document.getElementById('modalTitle').textContent = 'Transaction Pending';
+        document.getElementById('modalDesc').textContent = 'Waiting for blockchain confirmation…';
+        document.getElementById('modalDetail').innerHTML = `<span>Tx Hash:</span> ${tx.hash}`;
+        document.getElementById('modalIcon').textContent = '⏳';
+        document.getElementById('modalActions').innerHTML = '';
+
+        await tx.wait();
+
+        document.getElementById('modalTitle').textContent = 'Transaction Confirmed!';
+        document.getElementById('modalDesc').textContent = 'Successfully recorded on-chain.';
+        document.getElementById('modalIcon').textContent = '✅';
+        document.querySelector('.modal').classList.add('success');
+        document.getElementById('modalActions').innerHTML = `
+      <button class="btn btn-primary" onclick="closeModal(); fetchData();" style="width:100%;justify-content:center;">
+        Close & Refresh
+      </button>`;
+
+        showToast('success', '✅ Transaction confirmed on-chain!');
+
+        // Clear form
+        document.getElementById('inpAddr').value = '';
+        document.getElementById('inpAmount').value = '';
+        document.getElementById('inpPurpose').value = '';
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('modalTitle').textContent = 'Transaction Failed';
+        document.getElementById('modalDesc').textContent = err.reason || err.message || 'Unknown error';
+        document.getElementById('modalIcon').textContent = '❌';
+        document.querySelector('.modal').classList.add('error');
+        document.getElementById('modalActions').innerHTML = `
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>`;
+        showToast('error', '❌ Transaction failed.');
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      }
+    }
+
+    /* =====================================================
+       AMOUNT HINT (live ETH conversion)
+    ===================================================== */
+    document.addEventListener('DOMContentLoaded', () => {
+      const amtInput = document.getElementById('inpAmount');
+      if (amtInput) {
+        amtInput.addEventListener('input', () => {
+          const hint = document.getElementById('amtHint');
+          const val = amtInput.value.trim();
+          if (!val || val === '0') {
+            hint.textContent = '≈ 0 ETH · ⚠️ Will be FLAGGED (zero amount)';
+            hint.style.color = 'var(--red)';
+            return;
+          }
+          try {
+            const eth = parseFloat(ethers.formatEther(BigInt(val)));
+            const high = BigInt(val) > HIGH_THRESHOLD;
+            hint.textContent = `≈ ${eth.toFixed(6)} ETH · ${high ? '⚠️ High-value alert' : 'Normal range'}`;
+            hint.style.color = high ? 'var(--amber)' : 'var(--text-muted)';
+          } catch {
+            hint.textContent = 'Invalid amount';
+            hint.style.color = 'var(--red)';
+          }
+        });
+      }
+    });
+
+    /* =====================================================
+       BLOCK LISTENER
+    ===================================================== */
+    async function startBlockListener() {
+      if (!provider) return;
+      provider.on('block', (blockNumber) => {
+        document.getElementById('statusBlock').textContent = '· Block: ' + blockNumber;
+      });
+    }
+
+    /* =====================================================
+       HELPERS
+    ===================================================== */
+    function scrollToFlagged() {
+      const el = document.getElementById('flaggedPanel');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function openEtherscan() {
+      const cfg = CONTRACTS[chainId];
+      if (!cfg) return;
+      const base = chainId === 11155111 ? 'https://sepolia.etherscan.io' : '#';
+      window.open(base + '/address/' + cfg.address, '_blank');
+    }
+
+    function showToast(type, msg) {
+      const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+      document.getElementById('toastContainer').appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(60px)';
+        toast.style.transition = 'all 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    /* Close modal on overlay click */
+    document.getElementById('submitModal').addEventListener('click', function (e) {
+      if (e.target === this) closeModal();
+    });
+
+    /* =====================================================
+       DEMO DATA INJECTION (for judging/demo without MetaMask)
+    ===================================================== */
+    window.loadDemoData = function () {
+      showToast('info', '🎭 Loading demo data…');
+
+      // Simulated transactions (mimic contract struct)
+      allTxns = [
+        { recipient: '0xAbCd1234567890EFabcd1234567890efABCD1234', amount: ethers.parseEther('2.5'), purpose: 'Infrastructure Grant Q2', flagged: false },
+        { recipient: '0x1111222233334444555566667777888899990000', amount: 0n, purpose: '', flagged: true },
+        { recipient: '0xDeAdBeEf00000000000000000000000000000001', amount: ethers.parseEther('50.0'), purpose: 'Emergency Relief Fund', flagged: true },
+        { recipient: '0xFaCeB00c0000000000000000000000000000CAFE', amount: ethers.parseEther('1.2'), purpose: 'School Renovation', flagged: false },
+        { recipient: '0x0000000000000000000000000000000000000042', amount: ethers.parseEther('0.05'), purpose: '', flagged: true },
+        { recipient: '0xBaBaFaceBaBaFace000000000000000000000001', amount: ethers.parseEther('3.0'), purpose: 'Road Maintenance Batch 7', flagged: false },
+      ];
+      flaggedTxns = allTxns.filter(t => t.flagged);
+
+      document.getElementById('connectPrompt').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      animateStatCards();
+      applyRoleUI(currentRole);
+
+      document.getElementById('walletDisplay').textContent = '0xDEMO…0000 (demo mode)';
+      document.getElementById('contractAddrDisplay').textContent = '0x5FbDB231…180aa3';
+      document.getElementById('networkDisplay').textContent = 'Demo Mode';
+      document.getElementById('roleDisplay').textContent = currentRole.toUpperCase();
+      document.getElementById('netDot').className = 'net-dot connected';
+      document.getElementById('netLabel').textContent = 'Demo Mode';
+
+      const btn = document.getElementById('connectBtn');
+      btn.textContent = '0xDEMO…0000';
+      btn.classList.add('connected');
+
+      renderStats();
+      renderTxTable();
+      renderFlagged();
+      renderAnalytics();
+    };
+
+    /* Auto-launch demo if MetaMask is absent (hackathon judging UX) */
+    window.addEventListener('load', () => {
+      if (!window.ethereum) {
+        setTimeout(() => {
+          showToast('info', '🎭 No wallet detected — loading demo data');
+          window.loadDemoData();
+        }, 800);
+      }
+    });
+  </script>
+</body>
+
+</html>
