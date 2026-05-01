@@ -236,6 +236,57 @@ contract FundShieldTest is Test {
 
     // ─── Category spending caps ─────────────────────────────────
 
+    // ─── Time-lock ──────────────────────────────────────────────
+
+    function test_TimeLock_CleanExpenseExecutesImmediately() public {
+        vm.prank(ALICE);
+        fs.depositFunds{value: 2 ether}();
+
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 1 ether, "pay vendor", "operations");
+        fs.approveExpense(id);
+
+        // Not flagged → no time-lock → should execute immediately
+        assertEq(fs.executeAfter(id), 0);
+        fs.executeExpense(id);
+        assertEq(uint256(fs.getExpense(id).status), uint256(FundShield.Status.Executed));
+    }
+
+    function test_TimeLock_FlaggedExpenseLockedFor48h() public {
+        vm.prank(ALICE);
+        fs.depositFunds{value: 10 ether}();
+
+        // 4 ETH = $12,000 > $10,000 → flagged
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 4 ether, "flagged expense", "capital");
+        fs.approveExpense(id);
+
+        assertTrue(fs.executeAfter(id) > 0);
+
+        // Attempting to execute immediately reverts
+        vm.expectRevert(
+            abi.encodeWithSelector(FundShield.TimeLockActive.selector, id, fs.executeAfter(id), block.timestamp)
+        );
+        fs.executeExpense(id);
+    }
+
+    function test_TimeLock_FlaggedExpenseExecutableAfterDelay() public {
+        vm.prank(ALICE);
+        fs.depositFunds{value: 10 ether}();
+
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 4 ether, "flagged expense", "capital");
+        fs.approveExpense(id);
+
+        uint256 unlock = fs.executeAfter(id);
+        vm.warp(unlock + 1);
+
+        fs.executeExpense(id);
+        assertEq(uint256(fs.getExpense(id).status), uint256(FundShield.Status.Executed));
+    }
+
+    // ─── Category spending caps ─────────────────────────────────
+
     function test_CategoryBudget_SetAndRead() public {
         fs.setCategoryBudget("operations", 5 ether);
         (uint256 budget, uint256 spent, uint256 remaining) = fs.getCategoryInfo("operations");

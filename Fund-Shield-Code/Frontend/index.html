@@ -1625,7 +1625,10 @@
       {"inputs":[{"internalType":"string","name":"","type":"string"}],"name":"categorySpent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"velocityThreshold","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"receiverWindowCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"newThreshold","type":"uint256"}],"name":"setVelocityThreshold","outputs":[],"stateMutability":"nonpayable","type":"function"}
+      {"inputs":[{"internalType":"uint256","name":"newThreshold","type":"uint256"}],"name":"setVelocityThreshold","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"inputs":[],"name":"timeLockDelay","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"executeAfter","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"newDelay","type":"uint256"}],"name":"setTimeLockDelay","outputs":[],"stateMutability":"nonpayable","type":"function"}
     ];
 
     /* =====================================================
@@ -1793,8 +1796,11 @@
         allTxns = [];
         for (let i = 0; i < Number(total); i++) {
           try {
-            const exp = await contract.getExpense(i);
-            allTxns.push(exp);
+            const [exp, unlock] = await Promise.all([
+              contract.getExpense(i),
+              contract.executeAfter(i)
+            ]);
+            allTxns.push({ ...exp, executeAfter: unlock });
           } catch (e) {
             console.warn(`Could not fetch expense ${i}:`, e);
           }
@@ -1908,7 +1914,15 @@
             <button class="btn btn-danger" style="font-size:9px;padding:4px 8px;" onclick="rejectExpense(${exp.id})">✗ Reject</button>
           `;
         } else if (exp.status == 1) { // Approved
-          actionsHtml = `<button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="executeExpense(${exp.id})">▶ Execute</button>`;
+          const unlockTs = exp.executeAfter !== undefined ? Number(exp.executeAfter) : 0;
+          const nowTs = Math.floor(Date.now() / 1000);
+          const isLocked = unlockTs > 0 && nowTs < unlockTs;
+          if (isLocked) {
+            const hoursLeft = Math.ceil((unlockTs - nowTs) / 3600);
+            actionsHtml = `<span style="font-size:9px;color:var(--amber)">⏳ Locked ~${hoursLeft}h</span>`;
+          } else {
+            actionsHtml = `<button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="executeExpense(${exp.id})">▶ Execute</button>`;
+          }
         }
 
         return `

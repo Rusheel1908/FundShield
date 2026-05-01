@@ -66,6 +66,10 @@ contract FundShield {
     mapping(address => uint256) public receiverWindowStart;
     // how many payments to the same receiver within 7 days triggers a flag
     uint256 public velocityThreshold;
+    // minimum delay (seconds) before a large flagged expense can be executed after approval
+    uint256 public timeLockDelay;
+    // expenseId → earliest timestamp at which executeExpense may be called (0 = no lock)
+    mapping(uint256 => uint256) public executeAfter;
 
     // ─────────────────────────────────────────────────────────────
     // Events
@@ -78,6 +82,8 @@ contract FundShield {
     event CategoryBudgetSet(string category, uint256 budget);
     event CategorySpentUpdated(string category, uint256 spent, uint256 budget);
     event VelocityThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
+    event TimeLockDelayUpdated(uint256 oldDelay, uint256 newDelay);
+    event TimeLockSet(uint256 indexed id, uint256 executeAfter);
     event ExpenseSubmitted(
         uint256 indexed id,
         address indexed requester,
@@ -108,6 +114,7 @@ contract FundShield {
     error AlreadySigned(uint256 id, address auditor);
     error InvalidQuorum(uint256 required);
     error CategoryBudgetExceeded(string category, uint256 budget, uint256 spent, uint256 requested);
+    error TimeLockActive(uint256 id, uint256 executeAfter, uint256 currentTime);
 
     // ─────────────────────────────────────────────────────────────
     // Modifiers
@@ -134,6 +141,7 @@ contract FundShield {
         largeAmountThresholdUSD = 10_000e8; // default $10,000
         requiredApprovals = 1;              // default: single auditor (backwards-compatible)
         velocityThreshold = 3;              // flag after 3 payments to the same receiver in 7 days
+        timeLockDelay = 48 hours;           // flagged expenses must wait 48h after approval
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -149,6 +157,13 @@ contract FundShield {
         uint256 oldThreshold = largeAmountThresholdUSD;
         largeAmountThresholdUSD = newThresholdUSD;
         emit LargeAmountThresholdUpdated(oldThreshold, newThresholdUSD);
+    }
+
+    /// @notice Set the time-lock delay (in seconds) applied to flagged expenses after approval.
+    function setTimeLockDelay(uint256 newDelay) external onlyOwner {
+        uint256 old = timeLockDelay;
+        timeLockDelay = newDelay;
+        emit TimeLockDelayUpdated(old, newDelay);
     }
 
     /// @notice Set how many payments to the same receiver within 7 days triggers a flag.
@@ -230,6 +245,11 @@ contract FundShield {
         if (expense.approvalCount >= requiredApprovals) {
             expense.status = Status.Approved;
             expense.approver = msg.sender;
+            // Flagged expenses must wait timeLockDelay before execution
+            if (expense.flagged && timeLockDelay > 0) {
+                executeAfter[id] = block.timestamp + timeLockDelay;
+                emit TimeLockSet(id, executeAfter[id]);
+            }
             emit ExpenseApproved(id, msg.sender);
         }
     }
@@ -251,6 +271,8 @@ contract FundShield {
     function executeExpense(uint256 id) external onlyOwner {
         Expense storage expense = _expenses[_validateExpenseId(id)];
         if (expense.status != Status.Approved) revert InvalidStatus(Status.Approved, expense.status);
+        uint256 unlock = executeAfter[id];
+        if (unlock > 0 && block.timestamp < unlock) revert TimeLockActive(id, unlock, block.timestamp);
         if (address(this).balance < expense.amount) revert InsufficientBalance(address(this).balance, expense.amount);
 
         expense.status = Status.Executed;
