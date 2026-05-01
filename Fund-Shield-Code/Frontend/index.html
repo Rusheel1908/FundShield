@@ -1606,7 +1606,7 @@
       {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"executeExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
       {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"cancelExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},
       {"inputs":[{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"}],"name":"submitExpense","outputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"getExpense","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"getExpense","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"},{"internalType":"uint256","name":"approvalCount","type":"uint256"}],"internalType":"struct FundShield.Expense","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"getFlaggedExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"flagged","type":"tuple[]"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"getPendingExpenses","outputs":[{"components":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"requester","type":"address"},{"internalType":"address","name":"receiver","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"string","name":"purpose","type":"string"},{"internalType":"string","name":"category","type":"string"},{"internalType":"bool","name":"flagged","type":"bool"},{"internalType":"enum FundShield.Status","name":"status","type":"uint8"},{"internalType":"address","name":"approver","type":"address"},{"internalType":"string","name":"rejectReason","type":"string"},{"internalType":"uint256","name":"createdAt","type":"uint256"},{"internalType":"uint256","name":"updatedAt","type":"uint256"}],"internalType":"struct FundShield.Expense[]","name":"pending","type":"tuple[]"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"totalExpenses","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
@@ -1615,7 +1615,10 @@
       {"inputs":[],"name":"largeAmountThresholdUSD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[],"name":"getLatestETHPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
       {"inputs":[{"internalType":"uint256","name":"weiAmount","type":"uint256"}],"name":"getAmountInUSD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"priceFeed","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}
+      {"inputs":[],"name":"priceFeed","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"requiredApprovals","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"address","name":"auditor","type":"address"}],"name":"hasApproved","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"uint256","name":"newRequired","type":"uint256"}],"name":"setRequiredApprovals","outputs":[],"stateMutability":"nonpayable","type":"function"}
     ];
 
     /* =====================================================
@@ -1631,6 +1634,7 @@
     let flaggedTxns = [];
     let ethPriceUSD = 0n;       // 8-decimal BigInt from Chainlink (e.g. 3000e8 = $3,000)
     let HIGH_THRESHOLD_USD = 10_000n * 100_000_000n; // $10,000 default (8 decimals)
+    let requiredApprovals = 1n; // quorum from contract
 
     /* =====================================================
        STAGGER ANIMATIONS — stat cards
@@ -1766,15 +1770,17 @@
       if (!contract) { showToast('error', '⚠️ Contract not connected.'); return; }
 
       try {
-        const [total, flagged, pending, thresholdUSD, ethPrice] = await Promise.all([
+        const [total, flagged, pending, thresholdUSD, ethPrice, reqApprovals] = await Promise.all([
           contract.totalExpenses(),
           contract.getFlaggedExpenses(),
           contract.getPendingExpenses(),
           contract.largeAmountThresholdUSD(),
-          contract.getLatestETHPrice()
+          contract.getLatestETHPrice(),
+          contract.requiredApprovals()
         ]);
         HIGH_THRESHOLD_USD = thresholdUSD;
         ethPriceUSD = ethPrice;
+        requiredApprovals = reqApprovals;
 
         // Build allTxns by fetching each expense individually
         allTxns = [];
@@ -1882,10 +1888,16 @@
         const statusLabel = STATUS_ENUM[Number(exp.status)] || 'Unknown';
         const statusColor = exp.status == 1 ? 'var(--green)' : exp.status == 2 ? 'var(--cyan)' : exp.status == 3 || exp.status == 4 ? 'var(--red)' : 'var(--amber)';
 
+        const approvalCount = exp.approvalCount !== undefined ? BigInt(exp.approvalCount) : 0n;
+        const sigBadge = exp.status == 0
+          ? `<span style="font-size:9px;color:var(--text-muted);display:block;margin-bottom:2px">${approvalCount}/${requiredApprovals} sig${requiredApprovals > 1n ? 's' : ''}</span>`
+          : '';
+
         let actionsHtml = '';
         if (exp.status == 0) { // Pending
           actionsHtml = `
-            <button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="approveExpense(${exp.id})">✓ Approve</button>
+            ${sigBadge}
+            <button class="btn btn-ghost" style="font-size:9px;padding:4px 8px;" onclick="approveExpense(${exp.id})">✓ Sign</button>
             <button class="btn btn-danger" style="font-size:9px;padding:4px 8px;" onclick="rejectExpense(${exp.id})">✗ Reject</button>
           `;
         } else if (exp.status == 1) { // Approved

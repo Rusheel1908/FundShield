@@ -44,6 +44,7 @@ contract FundShieldTest is Test {
     function test_OwnerIsDeployerAndAuditor() public view {
         assertEq(fs.owner(), address(this));
         assertTrue(fs.auditors(address(this)));
+        assertEq(fs.requiredApprovals(), 1);
     }
 
     function test_PriceFeedIsSet() public view {
@@ -171,6 +172,66 @@ contract FundShieldTest is Test {
     function test_SetLargeAmountThresholdUSD() public {
         fs.setLargeAmountThresholdUSD(50_000e8); // $50,000
         assertEq(fs.largeAmountThresholdUSD(), 50_000e8);
+    }
+
+    function test_MultiSig_SingleAuditorDefaultWorks() public {
+        // requiredApprovals=1 (default): one approval is enough
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 1 ether, "pay vendor", "operations");
+
+        fs.approveExpense(id); // owner is also auditor
+        assertEq(uint256(fs.getExpense(id).status), uint256(FundShield.Status.Approved));
+        assertEq(fs.getExpense(id).approvalCount, 1);
+    }
+
+    function test_MultiSig_RequiresTwoApprovals() public {
+        address CAROL = address(0xCA401);
+        fs.setAuditor(ALICE, true);
+        fs.setAuditor(CAROL, true);
+        fs.setRequiredApprovals(2);
+
+        vm.prank(BOB);
+        uint256 id = fs.submitExpense(address(0xDEAD), 1 ether, "pay vendor", "operations");
+
+        // First signature — still Pending
+        vm.prank(ALICE);
+        fs.approveExpense(id);
+        assertEq(uint256(fs.getExpense(id).status), uint256(FundShield.Status.Pending));
+        assertEq(fs.getExpense(id).approvalCount, 1);
+
+        // Second signature — now Approved
+        vm.prank(CAROL);
+        fs.approveExpense(id);
+        assertEq(uint256(fs.getExpense(id).status), uint256(FundShield.Status.Approved));
+        assertEq(fs.getExpense(id).approvalCount, 2);
+    }
+
+    function test_MultiSig_CannotSignTwice() public {
+        vm.prank(ALICE);
+        uint256 id = fs.submitExpense(BOB, 1 ether, "pay vendor", "operations");
+
+        fs.approveExpense(id);
+
+        vm.expectRevert(abi.encodeWithSelector(FundShield.AlreadySigned.selector, id, address(this)));
+        fs.approveExpense(id);
+    }
+
+    function test_MultiSig_HasApprovedTracksCorrectly() public {
+        fs.setAuditor(ALICE, true);
+        fs.setRequiredApprovals(2);
+
+        vm.prank(BOB);
+        uint256 id = fs.submitExpense(address(0xDEAD), 1 ether, "pay vendor", "operations");
+
+        assertFalse(fs.hasApproved(id, address(this)));
+        fs.approveExpense(id);
+        assertTrue(fs.hasApproved(id, address(this)));
+        assertFalse(fs.hasApproved(id, ALICE));
+    }
+
+    function test_SetRequiredApprovals_ZeroReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(FundShield.InvalidQuorum.selector, 0));
+        fs.setRequiredApprovals(0);
     }
 
     function test_OnlyAuditorCanApproveRevert() public {

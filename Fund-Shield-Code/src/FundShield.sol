@@ -12,8 +12,8 @@ interface AggregatorV3Interface {
 
 /**
  * @title FundShield
- * @notice On-chain treasury transparency with expense approval and suspicious spending flagging.
- * @dev Uses Chainlink ETH/USD price feed for USD-denominated large-amount threshold detection.
+ * @notice On-chain treasury transparency with expense approval, multi-sig auditor sign-off,
+ *         and USD-denominated suspicious spending flagging via Chainlink price feed.
  */
 contract FundShield {
     // ─────────────────────────────────────────────────────────────
@@ -37,10 +37,11 @@ contract FundShield {
         string category;
         bool flagged;
         Status status;
-        address approver;
+        address approver;       // last auditor whose signature completed the quorum
         string rejectReason;
         uint256 createdAt;
         uint256 updatedAt;
+        uint256 approvalCount;  // number of auditor signatures collected so far
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -50,8 +51,11 @@ contract FundShield {
     address public owner;
     AggregatorV3Interface public priceFeed;
     uint256 public largeAmountThresholdUSD; // 8-decimal USD, e.g. 10_000e8 = $10,000
+    uint256 public requiredApprovals;       // quorum: N auditors must sign before Approved
     Expense[] private _expenses;
     mapping(address => bool) public auditors;
+    // expenseId → auditorAddress → has signed
+    mapping(uint256 => mapping(address => bool)) private _approvedBy;
 
     // ─────────────────────────────────────────────────────────────
     // Events
@@ -60,6 +64,7 @@ contract FundShield {
     event FundsDeposited(address indexed sender, uint256 amount);
     event AuditorUpdated(address indexed auditor, bool authorized);
     event LargeAmountThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
+    event RequiredApprovalsUpdated(uint256 oldRequired, uint256 newRequired);
     event ExpenseSubmitted(
         uint256 indexed id,
         address indexed requester,
@@ -69,6 +74,7 @@ contract FundShield {
         string category,
         bool flagged
     );
+    event ExpenseSigned(uint256 indexed id, address indexed auditor, uint256 approvalCount, uint256 required);
     event ExpenseApproved(uint256 indexed id, address indexed approver);
     event ExpenseRejected(uint256 indexed id, address indexed approver, string reason);
     event ExpenseExecuted(uint256 indexed id, address indexed executor, uint256 amount);
@@ -86,6 +92,8 @@ contract FundShield {
     error InsufficientBalance(uint256 balance, uint256 required);
     error EmptyReason();
     error AlreadyFinalized(Status actual);
+    error AlreadySigned(uint256 id, address auditor);
+    error InvalidQuorum(uint256 required);
 
     // ─────────────────────────────────────────────────────────────
     // Modifiers
@@ -110,6 +118,7 @@ contract FundShield {
         auditors[msg.sender] = true;
         priceFeed = AggregatorV3Interface(_priceFeed);
         largeAmountThresholdUSD = 10_000e8; // default $10,000
+        requiredApprovals = 1;              // default: single auditor (backwards-compatible)
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -125,6 +134,14 @@ contract FundShield {
         uint256 oldThreshold = largeAmountThresholdUSD;
         largeAmountThresholdUSD = newThresholdUSD;
         emit LargeAmountThresholdUpdated(oldThreshold, newThresholdUSD);
+    }
+
+    /// @notice Set how many distinct auditor signatures are required to approve an expense.
+    function setRequiredApprovals(uint256 newRequired) external onlyOwner {
+        if (newRequired == 0) revert InvalidQuorum(newRequired);
+        uint256 old = requiredApprovals;
+        requiredApprovals = newRequired;
+        emit RequiredApprovalsUpdated(old, newRequired);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -160,22 +177,32 @@ contract FundShield {
                 approver: address(0),
                 rejectReason: "",
                 createdAt: block.timestamp,
-                updatedAt: block.timestamp
+                updatedAt: block.timestamp,
+                approvalCount: 0
             })
         );
 
         emit ExpenseSubmitted(id, msg.sender, receiver, amount, purpose, category, flag);
     }
 
+    /// @notice Auditor signs an expense. Once `requiredApprovals` distinct signatures are
+    ///         collected the expense transitions to Approved automatically.
     function approveExpense(uint256 id) external onlyAuditor {
         Expense storage expense = _expenses[_validateExpenseId(id)];
         if (expense.status != Status.Pending) revert InvalidStatus(Status.Pending, expense.status);
+        if (_approvedBy[id][msg.sender]) revert AlreadySigned(id, msg.sender);
 
-        expense.status = Status.Approved;
-        expense.approver = msg.sender;
+        _approvedBy[id][msg.sender] = true;
+        expense.approvalCount += 1;
         expense.updatedAt = block.timestamp;
 
-        emit ExpenseApproved(id, msg.sender);
+        emit ExpenseSigned(id, msg.sender, expense.approvalCount, requiredApprovals);
+
+        if (expense.approvalCount >= requiredApprovals) {
+            expense.status = Status.Approved;
+            expense.approver = msg.sender;
+            emit ExpenseApproved(id, msg.sender);
+        }
     }
 
     function rejectExpense(uint256 id, string calldata reason) external onlyAuditor {
@@ -271,6 +298,11 @@ contract FundShield {
 
     function totalExpenses() external view returns (uint256) {
         return _expenses.length;
+    }
+
+    /// @notice Check whether a specific auditor has already signed a given expense.
+    function hasApproved(uint256 id, address auditor) external view returns (bool) {
+        return _approvedBy[id][auditor];
     }
 
     /// @notice Returns the latest ETH/USD price from Chainlink (8 decimals, e.g. 300000000000 = $3,000).
