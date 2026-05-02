@@ -1929,12 +1929,12 @@
     }
 
     function applyRoleUI(role) {
-      // Submit Expense panel — everyone can submit
-      const addPanel = document.getElementById('addTxPanel');
-      if (addPanel) addPanel.classList.toggle('hidden', false);
+      const showFull = role === 'admin' || role === 'auditor';
+
+      // Submit Expense — admin and auditor only
+      document.getElementById('addTxPanel')?.classList.toggle('hidden', !showFull);
 
       // Flagged + analytics + category budgets — admin & auditor only
-      const showFull = role === 'admin' || role === 'auditor';
       ['flaggedPanel', 'analyticsPanel', 'categoryBudgetPanel'].forEach(id => {
         document.getElementById(id)?.classList.toggle('hidden', !showFull);
       });
@@ -2372,6 +2372,7 @@
     ===================================================== */
     function openSubmitModal() {
       if (!contract) { showToast('error', '⚠️ Not connected to contract.'); return; }
+      if (currentRole === 'public') { showToast('error', '🔒 Only Admin or Auditor can submit expenses.'); return; }
 
       const addr = document.getElementById('inpAddr').value.trim();
       const amtEthStr = document.getElementById('inpAmount').value.trim();
